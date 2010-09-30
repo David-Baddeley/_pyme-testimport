@@ -1,3 +1,13 @@
+<<<<<<< /media/MOBILE HD/PYME/PYME/.hgignore
+syntax: glob
+*.pyc
+*.pyo
+*.pyd
+*.db
+*~
+*/build/*
+build\*
+=======
 syntax: glob
 *.so
 *.o
@@ -7,3 +17,4 @@ syntax: glob
 *~
 */build/*
 
+>>>>>>> /tmp/.hgignore~other.Nz2xzx
