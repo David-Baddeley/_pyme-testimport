@@ -1,0 +1,10 @@
+syntax: glob
+*.pyc
+*.pyo
+*.pyd
+*.db
+*~
+*/build/*
+build\*
+*.so
+*.o
