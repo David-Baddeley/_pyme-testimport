@@ -19,6 +19,7 @@ import numpy
 #additional arguments
 taskList = [
 T(-1, scope.turnAllLasersOff),
+T(-1, scope.joystick.Enable, False),
 #T(-1, SetEMGain,150),
 T(20, scope.filterWheel.SetFilterPos, "ND4.5"),
 T(21, scope.l671.TurnOn),
@@ -30,6 +31,7 @@ T(150, SetEMGain,150),
 T(160, MainFrame.pan_spool.OnBAnalyse, None),
 T(maxint, scope.turnAllLasersOff),
 T(maxint, scope.filterWheel.SetFilterPos, "ND4.5"),
+T(maxint, scope.joystick.Enable, True),
 ]
 
 #optional - metadata entries
@@ -40,6 +42,15 @@ metaData = [
 ('Protocol.BleachFrames', (61,150)),
 ]
 
+#optional - pre-flight check
+#a list of checks which should be performed prior to launching the protocol
+#syntax: C(expression to evaluate (quoted, should have boolean return), message to display on failure),
+preflight = [
+C('scope.cam.GetEMGain() == 150', 'Was expecting an intial e.m. gain of 150'),
+C('scope.cam.GetROIX1() > 0', 'Looks like no ROI has been set'),
+C('scope.cam.GetIntegTime() <= 50', 'Camera integration time may be too long'),
+]
+
 #must be defined for protocol to be discovered
-PROTOCOL = TaskListProtocol(taskList, metaData)
-PROTOCOL_STACK = ZStackTaskListProtocol(taskList, 101, 100, metaData, randomise = False)
+PROTOCOL = TaskListProtocol(taskList, metaData, preflight)
+PROTOCOL_STACK = ZStackTaskListProtocol(taskList, 101, 100, metaData, preflight, randomise = False)

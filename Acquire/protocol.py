@@ -27,8 +27,13 @@ class Protocol:
     def OnFrame(self, frameNum):
         pass
 
+    def PreflightCheck(self):
+        return []
+
     def OnFinish(self):
         pass
+
+
 
 NullProtocol = Protocol()
 
@@ -39,6 +44,13 @@ class TaskListTask:
         self.params = withParams
 
 T = TaskListTask #to save typing in protocols
+
+class PreflightCheckItem:
+    def __init__(self, check, message):
+        self.check = check
+        self.message = message
+
+C = PreflightCheckItem #to save typing in protocols
 
 def Ex(str):
     exec(str)
@@ -54,12 +66,21 @@ def SetCameraShutter(open):
     scope.pa.start()
 
 class TaskListProtocol(Protocol):
-    def __init__(self, taskList, metadataEntries = []):
+    def __init__(self, taskList, metadataEntries = [], preflightList=[]):
         self.taskList = taskList
         Protocol.__init__(self)
         self.listPos = 0
 
         self.metadataEntries = metadataEntries
+        self.preflightList = preflightList
+
+    def PreflightCheck(self):
+        failedChecks = []
+        for c in self.preflightList:
+            if not eval(c.check):
+                failedChecks.append(c)
+
+        return failedChecks
 
     def Init(self, spooler):
         self.listPos = 0
@@ -89,8 +110,8 @@ class TaskListProtocol(Protocol):
 
 
 class ZStackTaskListProtocol(TaskListProtocol):
-    def __init__(self, taskList, startFrame, dwellTime, metadataEntries = [], randomise = False):
-        TaskListProtocol.__init__(self, taskList, metadataEntries)
+    def __init__(self, taskList, startFrame, dwellTime, metadataEntries = [], preflightList=[], randomise = False):
+        TaskListProtocol.__init__(self, taskList, metadataEntries, preflightList)
         
         self.startFrame = startFrame
         self.dwellTime = dwellTime
