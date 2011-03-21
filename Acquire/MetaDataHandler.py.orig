@@ -27,6 +27,14 @@ getEntryNames(self)
 which returns a list of entry names to help with copying data between handlers
 '''
 from UserDict import DictMixin
+#import copy_reg
+#def pickleSlice(slice):
+#        return unpickleSlice, (slice.start, slice.stop, slice.step)
+#
+#def unpickleSlice(start, stop, step):
+#        return slice(start, stop, step)
+#
+#copy_reg.pickle(slice, pickleSlice, unpickleSlice)
 
 #lists where bits of hardware can register the fact that they are capable of 
 #providing metadata, by appending a function with the signature:
@@ -239,8 +247,13 @@ class XMLMDHandler(MDHandlerBase):
             node.setAttribute('value', repr(value))
         else: #pickle more complicated structures
             node.setAttribute('class', 'pickle')
+<<<<<<< /home/david/PYME/PYMEo/Acquire/MetaDataHandler.py
             print value, cPickle.dumps(value)
             node.setAttribute('value', base64.b64encode((cPickle.dumps(value))))
+=======
+            #print value, cPickle.dumps(value)
+            node.setAttribute('value', base64.b64encode((cPickle.dumps(value))))
+>>>>>>> /tmp/MetaDataHandler.py~other.psfBJj
 
 
     def getEntry(self,entryName):
