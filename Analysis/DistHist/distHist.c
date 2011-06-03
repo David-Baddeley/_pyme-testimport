@@ -277,7 +277,8 @@ static PyObject * distanceProduct(PyObject *self, PyObject *args, PyObject *keyw
 
     //return (PyObject*) out;
     return Py_BuildValue("d", res);
-}
+}
+
 
 #ifdef SSE
 static PyObject * distanceHistogramRS(PyObject *self, PyObject *args, PyObject *keywds)
