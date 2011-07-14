@@ -39,15 +39,31 @@ class deconvolver:
         #wx.EVT_MENU(dsviewer, DECONV_SAVE, self.saveDeconvolution)
 
         dsviewer.updateHooks.append(self.update)
-
+        
     def checkTQ(self):
         import Pyro.core
         if self.tq == None:
-            if 'PYME_TASKQUEUENAME' in os.environ.keys():
-                taskQueueName = os.environ['PYME_TASKQUEUENAME']
-            else:
-                taskQueueName = 'taskQueue'
+            #if 'PYME_TASKQUEUENAME' in os.environ.keys():
+            #    taskQueueName = os.environ['PYME_TASKQUEUENAME']
+            #else:
+            #    taskQueueName = 'taskQueue'
+
+            from PYME.misc.computerName import GetComputerName
+            compName = GetComputerName()
+
+            taskQueueName = 'TaskQueues.%s' % compName
+
             self.tq = Pyro.core.getProxyForURI('PYRONAME://' + taskQueueName)
+
+
+#    def checkTQ(self):
+#        import Pyro.core
+#        if self.tq == None:
+#            if 'PYME_TASKQUEUENAME' in os.environ.keys():
+#                taskQueueName = os.environ['PYME_TASKQUEUENAME']
+#            else:
+#                taskQueueName = 'taskQueue'
+#            self.tq = Pyro.core.getProxyForURI('PYRONAME://' + taskQueueName)
 
     def OnDeconvBead(self, event):
         self.OnDeconvICTM(None, True)
@@ -86,7 +102,7 @@ class deconvolver:
                     #rescale psf to match data voxel size
                     psf = ndimage.zoom(psf, [vs.x/vx, vs.y/vy, vs.z/vz])
 
-            data = self.image.data[:,:,:].astype('f')
+            data = self.image.data[:,:,:].astype('f') - dlg.GetOffset()
 
             #crop PSF in z if bigger than stack
             if psf.shape[2] > data.shape[2]:
