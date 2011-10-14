@@ -66,11 +66,11 @@ scope.shutters = fakeShutters
 
 
 #PIFoc
-#InitBG('PIFoc', '''
-#from PYME.Acquire.Hardware.Piezos import piezo_e816
-#scope.piFoc = piezo_e816.piezo_e816('COM2', 400, -0.399)
-#scope.piezos.append((scope.piFoc, 1, 'PIFoc'))
-#''')
+InitBG('PIFoc', '''
+from PYME.Acquire.Hardware.Piezos import piezo_e816
+scope.piFoc = piezo_e816.piezo_e816('COM1', 400, 0, True)
+scope.piezos.append((scope.piFoc, 1, 'PIFoc'))
+''')
 
 #InitBG('Stage Stepper Motors', '''
 #from PYME.Acquire.Hardware.Mercury import mercuryStepper
@@ -102,7 +102,7 @@ ssp = sarcSpacing.SarcomereChecker(MainFrame, menuBar1, scope)
 #splitter
 #InitGUI('''
 #from PYME.Acquire.Hardware import splitter
-#splt = splitter.Splitter(MainFrame, mControls, scope, scope.cam, dichroic = 'FF741-Di01' , transLocOnCamera = 'Top')
+#splt = splitter.Splitter(MainFrame, mControls, scope, scope.cam, flipChan = 0, dichroic = 'NotYet' , transLocOnCamera = 'Top', flip=False)
 #''')
 
 #Z stage
@@ -148,26 +148,26 @@ time1.WantNotification.append(fk.refresh)
 #
 #''')
     
-#from PYME.Acquire.Hardware.FilterWheel import WFilter, FiltFrame
-#filtList = [WFilter(1, 'EMPTY', 'EMPTY', 0),
-#    WFilter(2, 'ND.5' , 'UVND 0.5', 0.5),
-#    WFilter(3, 'ND1'  , 'UVND 1'  , 1),
-#    WFilter(4, 'EMPTY', 'EMPTY', 0),
-#    WFilter(5, 'ND2'  , 'UVND 2'  , 2),
-#    WFilter(6, 'ND4.5'  , 'UVND 4.5'  , 4.5)]
-#
-#InitGUI('''
-#try:
-#    scope.filterWheel = FiltFrame(MainFrame, filtList)
-#    scope.filterWheel.SetFilterPos("ND4.5")
-#    toolPanels.append((scope.filterWheel, 'Filter Wheel'))
-#except:
-#    print 'Error starting filter wheel ...'
-#''')
+from PYME.Acquire.Hardware.FilterWheel import WFilter, FiltFrame
+filtList = [WFilter(1, 'EMPTY', 'EMPTY', 0),
+    WFilter(2, 'ND.5' , 'UVND 0.5', 0.5),
+    WFilter(3, 'ND1'  , 'UVND 1'  , 1),
+    WFilter(4, 'ND2', 'UVND 2', 2),
+    WFilter(5, 'ND3'  , 'UVND 3'  , 3),
+    WFilter(6, 'ND4'  , 'UVND 4'  , 4)]
+
+InitGUI('''
+try:
+    scope.filterWheel = FiltFrame(MainFrame, filtList, 'COM4')
+    scope.filterWheel.SetFilterPos("ND4")
+    toolPanels.append((scope.filterWheel, 'Filter Wheel'))
+except:
+    print 'Error starting filter wheel ...'
+''')
 
 
 #DigiData
-#scope.lasers = []
+scope.lasers = []
 #InitBG('DigiData', '''
 #from PYME.Acquire.Hardware.DigiData import DigiDataClient
 #dd = DigiDataClient.getDDClient()
