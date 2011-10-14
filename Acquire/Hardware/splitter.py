@@ -92,9 +92,9 @@ class Unmixer:
 
     def Unmix(self, data, mixMatrix, offset, ROI=[1,1,512, 512]):
         import scipy.linalg
-        from PYME import cSMI
-        from pylab import *
-        from PYME.DSView.dsviewer_npy import View3D
+        #from PYME import cSMI
+        #from pylab import *
+        #from PYME.DSView.dsviewer_npy import View3D
 
         umm = scipy.linalg.inv(mixMatrix)
 
@@ -103,7 +103,7 @@ class Unmixer:
         g_ = dsa[:, :(dsa.shape[1]/2)]
         r_ = dsa[:, (dsa.shape[1]/2):]
         if self.flip:
-            r_ = fliplr(r_)
+            r_ = numpy.fliplr(r_)
         r_ = self._deshift(r_, ROI)
 
         #print g_.shape, r_.shape
@@ -126,13 +126,14 @@ class Unmixer:
 
 
 class Splitter:
-    def __init__(self, parent, menu, scope, cam, dir='up_down', flipChan=1, dichroic = 'Unspecified', transLocOnCamera = 'Top', constrain=True):
+    def __init__(self, parent, menu, scope, cam, dir='up_down', flipChan=1, dichroic = 'Unspecified', transLocOnCamera = 'Top', constrain=True, flip = True):
         self.dir = dir
         self.scope = scope
         self.cam = cam
         self.flipChan=flipChan
         self.parent = parent
-        self.unmixer = Unmixer()
+        self.unmixer = Unmixer(flip=flip)
+        self.flip = flip
 
         #which dichroic mirror is installed
         self.dichroic = dichroic
@@ -143,6 +144,7 @@ class Splitter:
         MetaDataHandler.provideStartMetadata.append(self.ProvideMetadata)
 
         cam.splitting='none'
+        cam.splitterFlip = flip
 
         self.offset = 0
         self.mixMatrix = numpy.array([[1.,0.],[0.,1.]])
@@ -181,6 +183,7 @@ class Splitter:
         if self.scope.cam == self.cam:#only if the currently selected camera is being split
             mdh.setEntry('Splitter.Dichroic', self.dichroic)
             mdh.setEntry('Splitter.TransmittedPathPosition', self.transLocOnCamera)
+            mdh.setEntry('Splitter.Flip', self.flip)
 
             if 'shiftField' in dir(self):
                 mdh.setEntry('chroma.ShiftFilename', self.shiftFieldName)

@@ -229,6 +229,14 @@ class LMAnalyser:
 
         hsizer.Add(self.tDebounceRadius, 0,wx.ALL|wx.ALIGN_CENTER_VERTICAL, 0)
         vsizer.Add(hsizer, 0,wx.BOTTOM|wx.EXPAND, 10)
+        
+        hsizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        hsizer.Add(wx.StaticText(pan, -1, 'Z Shift [nm]:'), 1,wx.RIGHT|wx.ALIGN_CENTER_VERTICAL, 5)
+        self.tZShift = wx.TextCtrl(pan, -1, value='0', size=(50, -1))
+
+        hsizer.Add(self.tZShift, 0,wx.ALL|wx.ALIGN_CENTER_VERTICAL, 0)
+        vsizer.Add(hsizer, 0,wx.BOTTOM|wx.EXPAND, 10)
 
         hsizer = wx.BoxSizer(wx.HORIZONTAL)
         shiftFieldText = 'Shifts: <None>'
@@ -361,21 +369,21 @@ class LMAnalyser:
             if not self.SetShiftField():
                 return
 
-        if 'Psf' in fitMod and not 'PSFFile' in self.image.mdh.getEntryNames():
+        if 'Interp' in fitMod and not 'PSFFile' in self.image.mdh.getEntryNames():
             if not self.SetPSF():
                 return
 
-        if 'Psf' in fitMod  and 'Splitter' in fitMod and not 'Analysis.AxialShift' in self.image.mdh.getEntryNames():
-            dlg = wx.TextEntryDialog(self, 'What is the axial chromatic shift between splitter halves [nm]?',
-                'Axial Shift', '300')
+        if 'Interp' in fitMod  and 'Splitter' in fitMod and not 'Analysis.AxialShift' in self.image.mdh.getEntryNames():
+            #dlg = wx.TextEntryDialog(self, 'What is the axial chromatic shift between splitter halves [nm]?',
+            #    'Axial Shift', '300')
 
-            if dlg.ShowModal() == wx.ID_OK:
-                self.image.mdh.setEntry('Analysis.AxialShift', float(dlg.GetValue()))
-            else:
-                self.image.mdh.setEntry('Analysis.AxialShift', 0.)
+            #if dlg.ShowModal() == wx.ID_OK:
+            #    self.image.mdh.setEntry('Analysis.AxialShift', float(dlg.GetValue()))
+            #else:
+            self.image.mdh.setEntry('Analysis.AxialShift', float(self.tZShift.GetValue()))
 
 
-            dlg.Destroy()
+            #dlg.Destroy()
 
         if not driftEst:
             self.pushImages(startAt, threshold, fitMod)
@@ -606,10 +614,14 @@ class LMAnalyser:
         dataFilename = self.image.seriesName
         resultsFilename = genResultFileName(self.image.seriesName)
 
-        while os.path.exists(resultsFilename):
+        if os.path.exists(resultsFilename):
             di, fn = os.path.split(resultsFilename)
+            i = 1
+            stub = os.path.splitext(fn)[0]
+            while os.path.exists(os.path.join(di, stub + '_%d.h5r' % i)):
+                i += 1
             fdialog = wx.FileDialog(None, 'Analysis file already exists, please select a new filename',
-                        wildcard='H5R files|*.h5r', defaultDir=di, defaultFile=os.path.splitext(fn)[0] + '_1.h5r', style=wx.SAVE)
+                        wildcard='H5R files|*.h5r', defaultDir=di, defaultFile=stub + '_%d.h5r' % i, style=wx.SAVE)
             succ = fdialog.ShowModal()
             if (succ == wx.ID_OK):
                 resultsFilename = fdialog.GetPath().encode()
@@ -761,7 +773,7 @@ class LMAnalyser:
                  plot([p.x for p in ft.ofdDr], [p.y for p in ft.ofdDr], 'o', mew=2, mec='b', mfc='none', ms=9)
             if ft.fitModule in remFitBuf.splitterFitModules:
                     plot([p.x for p in ft.ofd], [d.shape[0] - p.y for p in ft.ofd], 'o', mew=2, mec='g', mfc='none', ms=9)
-            #axis('tight')
+            axis('tight')
             xlim(0, d.shape[1])
             ylim(0, d.shape[0])
             xticks([])
