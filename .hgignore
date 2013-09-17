@@ -1,0 +1,21 @@
+syntax: glob
+*.pyc
+*.pyo
+*.pyd
+*.db
+*~
+*/build/*
+build\*
+build/*
+*/_build/*
+*/dist/*
+dist\*
+*.so
+*.o
+*.class
+.spyderproject
+.rope*
+Deconv/fftw_wisdom
+*.orig
+.DS_Store
+*.egg-info*
