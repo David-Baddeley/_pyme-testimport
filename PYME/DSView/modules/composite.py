@@ -25,8 +25,9 @@ import wx.lib.mixins.listctrl  as  listmix
 import os
 #import pylab
 from PYME.Acquire import MetaDataHandler
-from PYME.DSView import image, View3D
-from PYME.DSView import dataWrap
+from PYME.io import image
+from PYME.DSView import View3D
+from PYME.io import dataWrap
 
 import wx.lib.agw.aui as aui
 
@@ -802,10 +803,10 @@ class compositor:
         #    names = self.image.mdh.getEntry('ChannelNames')
         #except:
         #    names = ['%d' % d for d in range(self.image.data.shape[3])]
-        from PYME.Analysis.DataSources import AlignDataSource
-        import PYME.DSView.dataWrap
+        from PYME.io.DataSources import AlignDataSource
+        from  PYME.io import dataWrap
         
-        if isinstance(self.image.data, PYME.DSView.dataWrap.ListWrap):
+        if isinstance(self.image.data, dataWrap.ListWrap):
             nd = [AlignDataSource.DataSource(ds) for ds in self.image.data.wrapList]
         else:
             nd = [AlignDataSource.DataSource(dataWrap.Wrap(self.image.data[:,:,:,i])) for i in range(self.image.data.shape[3])]

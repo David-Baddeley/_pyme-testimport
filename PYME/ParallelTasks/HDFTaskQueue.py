@@ -37,8 +37,8 @@ import logging
 import time
 import Queue
 
-from PYME.FileUtils.nameUtils import genResultFileName
-from PYME.ParallelTasks.relativeFiles import getFullFilename
+from PYME.io.FileUtils.nameUtils import genResultFileName, getFullFilename
+#from PYME.io.FileUtils.nameUtils import getFullFilename
 
 CHUNKSIZE = 50
 MAXCHUNKSIZE = 100 #allow chunk size to be improved to allow better caching
@@ -492,7 +492,7 @@ class HDFResultsTaskQueue(TaskQueue):
             
             return res
         elif fieldName == 'PSF':
-            from PYME.ParallelTasks.relativeFiles import getFullExistingFilename
+            #from PYME.ParallelTasks.relativeFiles import getFullExistingFilename
             res = None
 
             modName = self.resultsMDH.getEntry('PSFFile')
@@ -503,8 +503,8 @@ class HDFResultsTaskQueue(TaskQueue):
             return res
         elif fieldName == 'MAP':
             mapName, = args
-            from PYME.ParallelTasks.relativeFiles import getFullExistingFilename
-            from PYME.DSView.image import ImageStack
+            #from PYME.ParallelTasks.relativeFiles import getFullExistingFilename
+            from PYME.io.image import ImageStack
 
             print('Serving map: %s' %mapName)            
             fn = getFullExistingFilename(mapName)

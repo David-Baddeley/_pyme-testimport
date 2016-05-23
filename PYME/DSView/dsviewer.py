@@ -44,7 +44,7 @@ import PYME.misc.autoFoldPanel as afp
 from PYME.DSView.displayOptions import DisplayOpts
 from PYME.DSView.DisplayOptionsPanel import OptionsPanel
 #from PYME.DSView.OverlaysPanel import OverlayPanel
-from PYME.DSView.image import ImageStack
+from PYME.io.image import ImageStack
 
 from PYME.Acquire.mytimer import mytimer
 from PYME.Analysis import piecewiseMapping
@@ -237,6 +237,7 @@ class DSViewFrame(AUIFrame):
         tmp_menu.Append(wx.ID_OPEN, '&Open', "", wx.ITEM_NORMAL)
         tmp_menu.Append(wx.ID_SAVE, "&Save As", "", wx.ITEM_NORMAL)
         tmp_menu.Append(wx.ID_SAVEAS, "&Export Cropped", "", wx.ITEM_NORMAL)
+        
 
         #a submenu for modules to hook and install saving functions into
         self.save_menu = wx.Menu()
@@ -313,6 +314,8 @@ class DSViewFrame(AUIFrame):
         
         self.drop = dt()        
         self.SetDropTarget(self.drop)
+        
+        self.AddMenuItem('Save', 'To Cluster', self.OnSaveToCluster)
         
         
         
@@ -424,6 +427,10 @@ class DSViewFrame(AUIFrame):
     def OnSave(self, event=None):
         self.image.Save()
         self.SetTitle(self.image.filename)
+        
+    def OnSaveToCluster(self, event=None):
+        from PYME.io import clusterExport
+        clusterExport.SaveImageToCluster(self.image)
 
     def OnExport(self, event=None):
         self.image.Save(crop = True, view = self.view)

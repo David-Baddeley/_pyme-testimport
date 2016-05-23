@@ -90,6 +90,14 @@ class microscope(object):
         for k, v in kwargs.items():
             p, c, m = self.positioning[k]
             p.MoveTo(c, v/m)
+            
+    def GetPosRange(self):
+        res = {}
+        for k in self.positioning.keys():
+            p, c, m = self.positioning[k]
+            res[k] = (p.GetMin(c)*m,p.GetMax(c)*m) 
+
+        return res
         
 
     def _OpenSettingsDB(self):
@@ -245,7 +253,8 @@ class microscope(object):
         self.pa.Prepare()
 
         if 'shutterOpen' in dir(self.cam):
-            self.pa.WantFrameGroupNotification.append(self.satCheck)
+            #self.pa.WantFrameGroupNotification.append(self.satCheck)
+            self.pa.onFrameGroup.connect(self.satCheck)
             
         self.pa.start()
         
@@ -277,8 +286,8 @@ class microscope(object):
         self.camControls[camName].GetParent().Show()#GetParent().PinOpen()
         self.camControls[camName].GetParent().GetParent().Layout()
 
-        if 'sa' in dir(self):
-            self.sa.cam = self.cam
+        #if 'sa' in dir(self):
+        #    self.sa.cam = self.cam
 
         if 'pa' in dir(self):
             self.pa.cam = self.cam

@@ -30,8 +30,8 @@ from PYME.Acquire import MetaDataHandler
 from PYME.Acquire.Hardware import ccdCalibrator
 
 import os
-#from PYME.DSView import image
-from PYME.FileUtils import nameUtils
+#from PYME.io import image
+from PYME.io.FileUtils import nameUtils
 
 import threading
 
