@@ -35,9 +35,10 @@ except:
     print('Could not connect to the sample information database')
     sampInf = False
 #import win32api
-from PYME.FileUtils import nameUtils
-from PYME.FileUtils.freeSpace import get_free_space
-from PYME.ParallelTasks.relativeFiles import getRelFilename
+from PYME.io.FileUtils import nameUtils
+from PYME.io.FileUtils.nameUtils import numToAlpha, getRelFilename
+from PYME.io.FileUtils.freeSpace import get_free_space
+
 
 import PYME.Acquire.Protocols
 import PYME.Acquire.protocol as prot
@@ -59,31 +60,7 @@ def create(parent):
  wxID_FRSPOOLSTSPOOLINGTO, wxID_FRSPOOLTCSPOOLFILE, 
 ] = [wx.NewId() for _init_ctrls in range(14)]
 
-def baseconvert(number,todigits):
-    '''Converts a number to an arbtrary base.
-    
-    Parameters
-    ----------
-    number : int
-        The number to convert
-    todigits : iterable or string
-        The digits of the base e.g. '0123456' (base 7) 
-        or 'ABCDEFGHIJK' (non-numeric base 11)
-    '''
-    x = number
 
-    # create the result in base 'len(todigits)'
-    res=""
-
-    if x == 0:
-        res=todigits[0]
-    
-    while x>0:
-        digit = x % len(todigits)
-        res = todigits[digit] + res
-        x /= len(todigits)
-
-    return res
 
 
 #class FrSpool(wx.Frame):
@@ -276,10 +253,10 @@ class PanSpool(wx.Panel):
         self.UpdateFreeSpace()
 
     def _GenSeriesName(self):
-        return self.seriesStub + '_' + self._NumToAlph(self.seriesCounter)
+        return self.seriesStub + '_' + numToAlpha(self.seriesCounter)
 
-    def _NumToAlph(self, num):
-        return baseconvert(num, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    #def _NumToAlph(self, num):
+    #    return baseconvert(num, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
 
     def UpdateFreeSpace(self, event=None):
         '''Updates the free space display. 
@@ -360,19 +337,26 @@ class PanSpool(wx.Panel):
         
 
         #spoolType = self.rbQueue.GetStringSelection()        
-        #if self.cbQueue.GetValue():        
+        #if self.cbQueue.GetValue():  
+
+        if self.scope.cam.__class__.__name__ == 'FakeCamera':
+            fakeCycleTime = self.scope.cam.GetIntegTime()
+        else:
+            fakeCycleTime = None
+            
+        frameShape = (self.scope.cam.GetPicWidth(), self.scope.cam.GetPicHeight())
         
         if self.spoolType == 'Queue':
             self.queueName = getRelFilename(self.dirname + fn + '.h5')
-            self.spooler = QueueSpooler.Spooler(self.scope, self.queueName, self.scope.pa, protocol, self, complevel=compLevel)
+            self.spooler = QueueSpooler.Spooler(self.queueName, self.scope.pa.onFrame, frameShape = frameShape, protocol=protocol, guiUpdateCallback=self.Tick, complevel=compLevel, fakeCamCycleTime=fakeCycleTime)
             self.bAnalyse.Enable(True)
         elif self.spoolType == 'HTTP':
             #self.queueName = self.dirname + fn + '.h5'
             self.queueName = getRelFilename(self.dirname + fn + '.h5')
-            self.spooler = HTTPSpooler.Spooler(self.scope, self.queueName, self.scope.pa, protocol, self, complevel=compLevel)
+            self.spooler = HTTPSpooler.Spooler(self.queueName, self.scope.pa.onFrame, frameShape = frameShape, protocol=protocol, guiUpdateCallback=self.Tick, complevel=compLevel, fakeCamCycleTime=fakeCycleTime)
             self.bAnalyse.Enable(True)
         else:
-            self.spooler = HDFSpooler.Spooler(self.scope, self.dirname + fn + '.h5', self.scope.pa, protocol, self, complevel=compLevel)
+            self.spooler = HDFSpooler.Spooler(self.dirname + fn + '.h5', self.scope.pa.onFrame, frameShape = frameShape, protocol=protocol, guiUpdateCallback=self.Tick, complevel=compLevel, fakeCamCycleTime=fakeCycleTime)
 
         #if stack:
         #    self.spooler.md.setEntry('ZStack', True)

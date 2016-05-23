@@ -30,9 +30,9 @@ from PYME.Acquire import MetaDataHandler
 
 #from PYME.Acquire import eventLog
 import PYME.Acquire.Spooler as sp
-from PYME.Acquire import protocol as p
+#from PYME.Acquire import protocol as p
 
-from PYME.FileUtils import fileID
+from PYME.io.FileUtils import fileID
 
 class SpoolEvent(tables.IsDescription):
     '''Pytables description for Events table in spooled dataset'''
@@ -48,19 +48,16 @@ class EventLogger:
     spool : instance of HDFSpooler.Spooler
         The spooler to ascociate this logger with
     
-    scope : PYME.Acquire.microscope.microscope instance
-        The current microscope object
-    
     hdf5File : pytables hdf file 
         The open HDF5 file to write to
     '''
-    def __init__(self, spool, scope, hdf5File):
+    def __init__(self, spool, hdf5File):
       '''Create a new Events table.
       
       
       '''
       self.spooler = spool
-      self.scope = scope
+      #self.scope = scope
       self.hdf5File = hdf5File
     
       self.evts = self.hdf5File.createTable(hdf5File.root, 'Events', SpoolEvent)
@@ -98,16 +95,16 @@ class EventLogger:
 class Spooler(sp.Spooler):
     '''Responsible for the mechanics of spooling to a pytables/hdf file.
     '''
-    def __init__(self, scope, filename, acquisator, protocol = p.NullProtocol, parent=None, complevel=6, complib='zlib'):
+    def __init__(self, filename, frameSource, frameShape, complevel=6, complib='zlib', **kwargs):
         self.h5File = tables.openFile(filename, 'w')
            
         filt = tables.Filters(complevel, complib, shuffle=True)
         
-        self.imageData = self.h5File.createEArray(self.h5File.root, 'ImageData', tables.UInt16Atom(), (0,scope.cam.GetPicWidth(),scope.cam.GetPicHeight()), filters=filt)
+        self.imageData = self.h5File.createEArray(self.h5File.root, 'ImageData', tables.UInt16Atom(), (0,frameShape[0],frameShape[1]), filters=filt)
         self.md = MetaDataHandler.HDFMDHandler(self.h5File)
-        self.evtLogger = EventLogger(self, scope, self.h5File)
+        self.evtLogger = EventLogger(self, self.h5File)
         
-        sp.Spooler.__init__(self, scope, filename, acquisator, protocol, parent)
+        sp.Spooler.__init__(self, filename, frameSource, **kwargs)
 
     def StopSpool(self):
         '''Stop spooling and close file'''
@@ -116,14 +113,15 @@ class Spooler(sp.Spooler):
         self.h5File.flush()
         self.h5File.close()
         
-    def Tick(self, caller):
+    def OnFrame(self, sender, frameData, **kwargs):
         '''Called on each frame'''
-        self.imageData.append(caller.dsa.reshape(1,self.scope.cam.GetPicWidth(),self.scope.cam.GetPicHeight()))
+        #print 'f'
+        self.imageData.append(frameData.reshape(1,frameData.shape[0],frameData.shape[1]))
         self.h5File.flush()
         if self.imNum == 0: #first frame
             self.md.setEntry('imageID', fileID.genFrameID(self.imageData[0,:,:]))
             
-        sp.Spooler.Tick(self, caller)
+        sp.Spooler.OnFrame(self)
         
     def __del__(self):
         if self.spoolOn:
