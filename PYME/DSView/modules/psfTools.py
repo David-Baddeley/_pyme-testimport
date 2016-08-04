@@ -278,7 +278,7 @@ class PSFTools(HasTraits):
 
         dv = ViewIm3D(im, mode=mode, glCanvas=self.dsviewer.glCanvas, parent=wx.GetTopLevelParent(self.dsviewer))
 
-    def OnCalibrateAstigmatism(self, event, calib=None):
+    def OnCalibrateAstigmatism(self, event):
         from PYME.recipes.measurement import FitPoints
         import matplotlib.pyplot as plt
         import mpld3
@@ -343,9 +343,9 @@ class PSFTools(HasTraits):
         data = json.dumps(dat)
         print data
         template = env.get_template('astigCal.html')
-        #self._astig_view.SetPage(template.render(astigplot=fig, data=data), '')
-        if calib:
-            return data
+        html = template.render(astigplot=fig, data=data)
+        #print html
+        self._astig_view.SetPage(html, '')
 
         
         
