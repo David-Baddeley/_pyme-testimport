@@ -43,13 +43,15 @@ def foldX(pipeline):
         Adds channel assignments to the pipeline
 
     """
-    xOG = pipeline['x']
+    xOG = pipeline.selectedDataSource.resultsSource.fitResults['fitResults']['x0']
     roiSizeNM = (pipeline.mdh['Multiview.ROISize'][1]*pipeline.mdh['voxelsize.x']*1000)  # voxelsize is in um
     xfold = xOG % roiSizeNM
     mvQuad = np.floor(xOG / roiSizeNM)
 
     pipeline.mapping.setMapping('xFolded', xfold)
     pipeline.mapping.setMapping('whichChan', mvQuad)
+    #pipeline.mapping['xFolded'] = xfold
+    #pipeline.mapping['whichChan'] = mvQuad
     return
 
 def plotFolded(X, Y, multiviewChannels, title=''):
@@ -96,7 +98,7 @@ def plotRegistered(regX, regY, numChan, title=''):
     plt.title(title)
     return
 
-def pairMolecules(tIndex, x, y, whichChan, numChan, deltaX=None):
+def pairMolecules(tIndex, x, y, whichChan, numChan, deltaX=[None], appearIn=np.arange(4)):
     """
     pairMolecules uses pyDeClump functions to group localization clumps into molecules for registration.
 
@@ -107,10 +109,13 @@ def pairMolecules(tIndex, x, y, whichChan, numChan, deltaX=None):
         whichChan: a vector containing channel assignments for each localization
         numChan: number of multiview channels
         deltaX: distance within which neighbors will be clumped is set by 2*deltaX[i])**2
+        appearances: number of channels that must be present in a clump to be clumped
 
     Returns:
         x and y positions of molecules that were clumped, which channel those localizations are from,
-        and which clump they were assigned to.
+        and which clump they were assigned to. Note that outputs are length = #molecules, and the keep
+        vector that is return needs to be applied as: xkept = x[keep] in order to only look at kept molecules.
+        Note that the returned x, y, tIndex and whichChan are resorted.
 
     """
     # sort everything in frame order
@@ -121,14 +126,15 @@ def pairMolecules(tIndex, x, y, whichChan, numChan, deltaX=None):
     whichChan = whichChan[I]
 
     # group within a certain distance, potentially based on localization uncertainty
-    if not deltaX:
-        dX = 100.*np.ones_like(x)
+    if not deltaX[0]:
+        deltaX = 100.*np.ones_like(x)
     # group localizations
-    assigned = pyDeClump.findClumps(tIndex, x, y, dX)
+    assigned = pyDeClump.findClumps(tIndex, x, y, deltaX)
 
     # only look at clumps with localizations from each channel
     clumps = np.unique(assigned)
-    keptClumps = [np.array_equal(np.unique(whichChan[assigned == clumps[ii]]), np.arange(numChan)) for ii in range(len(clumps))]
+    keptClumps = [np.array_equal(np.unique(whichChan[assigned == clumps[ii]]), appearIn) for ii in range(len(clumps))]
+    #keptClumps = [(len(np.unique(whichChan[assigned == clumps[ii]])) >= appearances) for ii in range(len(clumps))]
 
     keptMoles = []
     # np.array_equal(clumps, np.arange(1, np.max(assigned) + 1)) evaluates to True
@@ -136,7 +142,47 @@ def pairMolecules(tIndex, x, y, whichChan, numChan, deltaX=None):
         keptMoles.append(elem in clumps[np.where(keptClumps)])
     keep = np.where(keptMoles)
 
-    return x[keep], y[keep], whichChan[keep], assigned[keep]
+    # don't clump molecules from the wrong channel (done by parsing modified whichChan to this function)
+    ignoreChan = whichChan < 0
+    numClump = np.max(assigned)
+    igVec = np.arange(numClump, numClump + len(ignoreChan))
+    # give ignored channel localizations unique clump assignments
+    assigned[ignoreChan] = igVec
+
+
+    return x, y, whichChan, assigned, keep
+
+def astigMAPism(stigLib, clump, whichChan, sigmax, sigmay):
+    """
+    Look up table
+    Args:
+        sigVals:
+
+    Returns:
+
+    """
+    import scipy.interpolate as terp
+    # generate lookup table
+    zVal = np.arange(stigLib['zRange'][0], stigLib['zRange'][1])
+
+    sigCalX = {}  # np.zeros((len(zVal), numPlanes))
+    sigCalY = {}  # np.zeros_like(sigCalX)
+
+    # generate look up table of sorts
+    for ii in np.unique(whichChan):
+        #sigVals = stigLib['sigxTerp%i' % ii](zVal)
+        #sigVals = stigLib['sigxTerp%i' % ii](zVal)
+        # Zsigy = sigmaLibrary['sigyTerp%i' % ii](zVal)
+        #astigLib['sigxTerp%i' % ii] = terp.UnivariateSpline(astigLib['PSF%i' % ii]['z'], astigLib['PSF%i' % ii]['sigmax'],
+        #                                                    bbox=[lowerZ, upperZ])
+        #astigLib['sigyTerp%i' % ii] = terp.UnivariateSpline(astigLib['PSF%i' % ii]['z'], astigLib['PSF%i' % ii]['sigmay'],
+        #                                                    bbox=[lowerZ, upperZ])
+        # FIXME: BBOX NEEDS DIFFERENT BOUNDS FOR EACH CHANNEL
+        sigCalX['chan%i' % ii] = terp.UnivariateSpline(stigLib['PSF%i' % ii]['z'], stigLib['PSF%i' % ii]['sigmax'],
+                                                            bbox=[stigLib['zRange'][0], stigLib['zRange'][1]])(zVal)
+        sigCalY['chan%i' % ii] = terp.UnivariateSpline(stigLib['PSF%i' % ii]['z'], stigLib['PSF%i' % ii]['sigmay'],
+                                                            bbox=[stigLib['zRange'][0], stigLib['zRange'][1]])(zVal)
+
 
 class multiviewMapper:
     """
@@ -154,16 +200,20 @@ class multiviewMapper:
     def __init__(self, visFr):
         self.visFr = visFr
 
-        ID_REGISTER_MULTIVIEW = wx.NewId()
-        visFr.extras_menu.Append(ID_REGISTER_MULTIVIEW, "Multiview - Register Channels")
-        visFr.Bind(wx.EVT_MENU, self.OnRegisterMultiview, id=ID_REGISTER_MULTIVIEW)
+        ID_CALIBRATE_SHIFTS = wx.NewId()
+        visFr.extras_menu.Append(ID_CALIBRATE_SHIFTS, "Multiview - Calibrate Shifts")
+        visFr.Bind(wx.EVT_MENU, self.OnCalibrateShifts, id=ID_CALIBRATE_SHIFTS)
 
-        ID_MAP_MULTIVIEW = wx.NewId()
-        visFr.extras_menu.Append(ID_MAP_MULTIVIEW, "Multiview - Map Z")
-        visFr.Bind(wx.EVT_MENU, self.OnFoldAndMap, id=ID_MAP_MULTIVIEW)
+        ID_MAP_XY = wx.NewId()
+        visFr.extras_menu.Append(ID_MAP_XY, "Multiview - Map XY")
+        visFr.Bind(wx.EVT_MENU, self.OnFoldAndMapXY, id=ID_MAP_XY)
+
+        ID_MAP_Z = wx.NewId()
+        visFr.extras_menu.Append(ID_MAP_Z, "Astigmatism - Map Z")
+        visFr.Bind(wx.EVT_MENU, self.OnMapZ, id=ID_MAP_Z)
         return
 
-    def applyShiftmaps(self, x, y, numChan):
+    def applyShiftmaps_nonOrderConserving(self, x, y, numChan):
         """
         applyShiftmaps loads multiview shiftmap parameters from multiviewMapper.shiftWallet, reconstructs the shiftmap
         objects, applies them to the multiview data, and maps the positions registered to the first channel to the pipeline
@@ -185,16 +235,70 @@ class multiviewMapper:
         shiftModule = importlib.import_module(self.shiftWallet['shiftModel'].split('.' + model)[0])
         shiftModel = getattr(shiftModule, model)
 
-        xReg, yReg = [x[0]], [y[0]]
+        # fixme: this needs to be done in such a way as to keep x and y matched up with the remaining fitResults
+        xReg, yReg, chan = [x[0]], [y[0]], [np.zeros_like(x[0])]
         for ii in range(1, numChan):
             xReg.append(x[ii] + shiftModel(dict=self.shiftWallet['Chan0%s.X' % ii]).ev(x[ii], y[ii]))
             yReg.append(y[ii] + shiftModel(dict=self.shiftWallet['Chan0%s.Y' % ii]).ev(x[ii], y[ii]))
+            chan.append(ii*np.ones_like(xReg[ii]))
+
+        xReg = np.hstack(xReg)
+        yReg = np.hstack(yReg)
+        chan = np.hstack(chan)
 
         pipeline.mapping.setMapping('xReg', xReg)
         pipeline.mapping.setMapping('yReg', yReg)
+        pipeline.mapping.setMapping('regChan', chan)
+        #pipeline['xReg'] = xReg
+        #pipeline['yReg'] = yReg
         return
 
-    def OnFoldAndMap(self, event):
+    def applyShiftmaps(self, numChan):
+        """
+        applyShiftmaps loads multiview shiftmap parameters from multiviewMapper.shiftWallet, reconstructs the shiftmap
+        objects, applies them to the multiview data, and maps the positions registered to the first channel to the pipeline
+
+        Args:
+            x: vector of localization x-positions
+            y: vector of localization y-positions
+            numChan: number of multiview channels
+
+        Returns: nothing
+            Maps shifted x-, and y-positions into the pipeline
+            xReg and yReg are both lists, where each element is an array of positions corresponding to a given channel
+
+        """
+        pipeline = self.visFr.pipeline
+        fres = pipeline.selectedDataSource.resultsSource.fitResults
+        try:
+            alreadyDone = pipeline.mapping.registered
+            return
+        except:
+            pass
+
+        # import shiftModel to be reconstructed
+        model = self.shiftWallet['shiftModel'].split('.')[-1]
+        shiftModule = importlib.import_module(self.shiftWallet['shiftModel'].split('.' + model)[0])
+        shiftModel = getattr(shiftModule, model)
+
+
+        x, y = pipeline.mapping.xFolded, fres['fitResults']['y0']
+        chan = pipeline.mapping.whichChan
+        # note that this will not throw out localizations outside of the frame, this will need to be done elsewhere
+        for ii in range(1, numChan):
+            chanMask = chan == ii
+            x = x + chanMask*shiftModel(dict=self.shiftWallet['Chan0%s.X' % ii]).ev(x, y)
+            y = y + chanMask*shiftModel(dict=self.shiftWallet['Chan0%s.Y' % ii]).ev(x, y)
+
+        # replace x and y with shifted data
+        #pipeline.mapping.resultsSource.resultsSource.fitResults['fitResults']['x0'] = x
+        #pipeline.mapping.resultsSource.resultsSource.fitResults['fitResults']['y0'] = y
+
+        # flag that this data has already been registered so it is not registered again
+        pipeline.mapping.setMapping('registered', True)
+        return x, y
+
+    def OnFoldAndMapXY(self, event):
         """
         OnFoldAndMap uses shiftmaps stored in metadata (by default) or loaded through the GUI to register multiview channelss
         to the first channel.
@@ -207,6 +311,7 @@ class multiviewMapper:
 
         """
         pipeline = self.visFr.pipeline
+        fres = pipeline.selectedDataSource.resultsSource.fitResults
 
         try:  # load shiftmaps from metadata, if present
             self.shiftWallet = pipeline.mdh.__dict__['Shiftmap']
@@ -228,22 +333,24 @@ class multiviewMapper:
         # fold x-positions into the first channel
         foldX(pipeline)
 
-        plotFolded(pipeline.mapping.__dict__['xFolded'], pipeline['y'],
-                            pipeline.mapping.__dict__['whichChan'], 'Raw')
+        plotFolded(pipeline.mapping.xFolded, fres['fitResults']['y0'],
+                            pipeline.mapping.whichChan, 'Raw')
 
         # organize x- and y-positions into list of arrays corresponding to channels
-        xfold, yfold = [], []
-        for ii in range(numChan):
-            xfold.append(pipeline.mapping.__dict__['xFolded'][np.where(pipeline.mapping.__dict__['whichChan'] == ii)])
-            yfold.append(pipeline['y'][np.where(pipeline.mapping.__dict__['whichChan'] == ii)])
+        #xfold, yfold = [], []
+        #for ii in range(numChan):
+        #    xfold.append(pipeline.mapping.xFolded[np.where(pipeline.mapping.whichChan == ii)])
+        #    yfold.append(pipeline['y'][np.where(pipeline.mapping.whichChan == ii)])
 
         # apply shiftmaps
-        self.applyShiftmaps(xfold, yfold, numChan)
+        x, y = self.applyShiftmaps(numChan)
 
-        plotRegistered(pipeline.mapping.__dict__['xReg'], pipeline.mapping.__dict__['yReg'],
-                            numChan, 'After Registration')
+        #plotRegistered(pipeline.mapping.xReg, pipeline.mapping.yReg,
+        #                    numChan, 'After Registration')
+        pipeline.mapping.setMapping('x', x)
+        pipeline.mapping.setMapping('y', y)
 
-    def OnRegisterMultiview(self, event):
+    def OnCalibrateShifts(self, event):
         """
 
         OnRegisterMultiview generates multiview shiftmaps on bead-data. Only beads which show up in all channels are
@@ -266,10 +373,12 @@ class multiviewMapper:
         # fold x position of channels into the first
         foldX(pipeline)
 
-        # Match up molecules
-        x, y, Chan, clumpID, = pairMolecules(pipeline['tIndex'], pipeline.mapping.__dict__['xFolded'], pipeline['y'],
-                      pipeline.mapping.__dict__['whichChan'], numChan)  #, pipeline['error_x'])
+        # Match up molecules, note that all outputs are sorted in frame order!
+        x, y, Chan, clumpID, keep = pairMolecules(pipeline['tIndex'], pipeline.mapping.xFolded, pipeline['fitResults_y0'],
+                      pipeline.mapping.whichChan, numChan, appearIn=np.arange(numChan))  #, pipeline['error_x'])
 
+        # only look at the ones which showed up in all channels
+        x = x[keep], y = y[keep], Chan = Chan[keep], clumpID = clumpID[keep]
         # Generate raw shift vectors (map of displacements between channels) for each channel
         molList = np.unique(clumpID)
         numMoles = len(molList)
@@ -337,18 +446,160 @@ class multiviewMapper:
         self.applyShiftmaps(xClump, yClump, numChan)
 
         # organize x- and y-positions into list of arrays corresponding to channel
-        xfold, yfold = [], []
+        xfold, yfold, tReg = [], [], []
         for ii in range(numChan):
-            xfold.append(pipeline.mapping.__dict__['xFolded'][np.where(pipeline.mapping.__dict__['whichChan'] == ii)])
-            yfold.append(pipeline['y'][np.where(pipeline.mapping.__dict__['whichChan'] == ii)])
+            xfold.append(pipeline.mapping.xFolded[np.where(pipeline.mapping.whichChan == ii)])
+            yfold.append(pipeline['fitResults_y0'][np.where(pipeline.mapping.whichChan == ii)])
+            tReg.append(pipeline['tIndex'][np.where(pipeline.mapping.whichChan == ii)])
+
+        pipeline.mapping.setMapping('tIndex_reg', np.hstack(tReg))
 
         plotRegistered(xfold, yfold, numChan, 'Raw')
 
         plotRegistered(xClump, yClump, numChan, 'Clumped')
 
-        plotRegistered(pipeline.mapping.__dict__['xReg'], pipeline.mapping.__dict__['yReg'],
+        plotRegistered(pipeline.mapping.xReg, pipeline.mapping.yReg,
                             numChan, 'After Registration')
 
+
+    def OnMapZ(self, event):
+        pipeline = self.visFr.pipeline
+        fres = pipeline.selectedDataSource.resultsSource.fitResults
+
+        try:
+            numChan = pipeline.mdh['Multiview.NumROIs']
+            chanColor = [0, 0, 1, 1]  # FIXME: pipeline.mdh['Multiview.ColorInfo']
+            numPlanes = numChan / len(np.unique(chanColor))
+        except AttributeError:
+            numChan = 1
+            chanColor = [0]
+            numPlanes = 1
+        try:  # load astigmatism calibrations from metadata, if present
+            stigLib = pipeline.mdh['astigLib']
+        except AttributeError:
+            try:  # load through GUI dialog
+                fdialog = wx.FileDialog(None, 'Load Astigmatism Calibration', #wildcard='Shift Field file (*.sf)|*.sf',
+                                        style=wx.OPEN, defaultDir=nameUtils.genShiftFieldDirectoryPath())
+                succ = fdialog.ShowModal()
+                if (succ == wx.ID_OK):
+                    fpath = fdialog.GetPath()
+                    # load json
+                    fid = open(fpath, 'r')
+                    stigLib = json.load(fid)
+                    fid.close()
+            except:
+                raise IOError('Astigmatism sigma-Z mapping information not found')
+
+        # make sure xy-registration has already happened:
+        if 'registered' not in pipeline.keys():
+            print('registering multiview channels in x-y plane')
+            self.OnFoldAndMapXY(event)
+
+        # clump molecules
+        pairs, clump, xco, yco, xcoErr, ycoErr, xsig, ysig, clist = [], [], [], [], [], [], [], [], []
+        # sort error and sigmas as x, y, and channel will be sorted
+        #I = pipeline['tIndex'].argsort()
+        #errX = pipeline['error_x'][I]
+        #errY = pipeline['error_y'][I]
+        #xs = pipeline['fitResults_sigmax'][I]
+        #ys = pipeline['fitResults_sigmay'][I]
+        #whichChan = pipeline.mapping.whichChan[I]
+        #pairs = np.zeros_like(errX, dtype=bool)
+        fitResCopy = np.copy(fres)
+        # inject xReg and yReg
+        fitResCopy['fitResults']['x0'] = pipeline.mapping.x
+        fitResCopy['fitResults']['y0'] = pipeline.mapping.y
+        #fres['fitResults'].setfield(2.0, [('test', '<i4')])
+        #fitResCopy.setfield(pipeline.mapping.whichChan, ['whichChan', '<i4'])
+        fitResCopy.whichChan = np.copy(pipeline.mapping.whichChan)
+        dt = fres.dtype.descr
+        addDT = [('sigmax_Plane%i' % pi, '<f4') for pi in range(numPlanes)]
+        dt[1][1].__add__(addDT)
+        for cind in range(len(chanColor)):
+            # trick pairMolecules function by tweaking the channel vector
+            # this needs to be unsorted at this point
+            planeInColorChan = np.copy(fitResCopy.whichChan) #fixme: needs to shrink with fitResCopy
+            chanColor = np.array(chanColor)
+            ignoreChans = np.where(chanColor != cind)[0]
+            igMask = [mm in ignoreChans.tolist() for mm in planeInColorChan]
+            planeInColorChan[np.where(igMask)] = -9
+            # clumpID is assigned, paired is keep
+            x, y, Chan, clumpID, paired = pairMolecules(fitResCopy['tIndex'], fitResCopy['fitResults']['x0'], fitResCopy['fitResults']['y0'],
+                          planeInColorChan, numChan, deltaX=100*fitResCopy['fitError']['x0'],
+                                                        appearIn=np.hstack([-9, np.where(chanColor == cind)[0]]))
+            for pind in range(numPlanes):
+                fitResCopy['fitResults']['sigmax_Plane%i' % pind] = (planeInColorChan == pind + cind*numPlanes)*fitResCopy['fitResults']['sigmax']
+                fitResCopy['fitResults']['sigmay_Plane%i' % pind] = (planeInColorChan == pind + cind*numPlanes)*fitResCopy['fitResults']['sigmay']
+
+            #clumpedRes['fitResults'] = clumpedRes['fitResults'][np.where(planeInColorChan >= 0)[0]]
+            # FIXME: fix coalesceClumps to average sigmas separately for each plane in channel
+
+            clumpedRes = pyDeClump.coalesceClumps(fitResCopy, clumpID)
+            fitResCopy = clumpedRes
+
+        # create data source for our clumped dat
+        from PYME.LMVis.inpFilt import fitResultsSource
+        pipeline.dataSources.append(fitResultsSource(clumpedRes))
+        pipeline.selectedDataSource = pipeline.dataSources[-1]
+        self.visFr.RegenFilter()
+        self.visFr.CreateFoldPanel()
+        '''
+            #pairs.append(paired)
+
+            # coalesce pairs in color channel
+            #clumpID[paired]
+            pairedClumps = np.unique(clumpID[paired])
+            xp = np.zeros(len(pairedClumps))
+            yp = np.zeros_like(xp)
+            xpErr = np.zeros_like(xp)
+            ypErr = np.zeros_like(xp)
+            color = cind*np.ones_like(xp)
+            sigxp = np.zeros((len(x) - len(pairedClumps), len(np.unique(planeInColorChan) - 1)))
+            sigyp = np.zeros_like(sigxp)
+            for ind in range(len(pairedClumps)):
+                # merge clumps within channels
+                mask = np.where(clumpID == pairedClumps[ind])
+                xp[ind] = x[mask].mean()
+                yp[ind] = y[mask].mean()
+
+                sigxp[ind, :] = xs[mask]
+                sigyp[ind, :] = ys[mask]
+                # propagate error
+                xpErr[ind] = np.sqrt(np.sum(errX[mask]**2))
+                ypErr[ind] = np.sqrt(np.sum(errY[mask]**2))
+
+
+
+
+            xco.append(xp)
+            yco.append(yp)
+            xcoErr.append(xpErr)
+            ycoErr.append(ypErr)
+            clist.append(color)  # fixme: do something with this if can't sort sigmas another way
+
+            pairs = np.logical_or(pairs, paired)
+
+            for ind in range(sigxp.shape[0] - len(pairedClumps)):
+                sigxp[ind + len(pairedClumps), whichChan[~paired][ind]] = xs[~paired][ind]
+                sigyp[ind + len(pairedClumps), whichChan[~paired][ind]] = ys[~paired][ind]
+
+        x = np.hstack(xco)
+        y = np.hstack(yco)
+        xErr = np.hstack(xcoErr)
+        yErr = np.hstack(ycoErr)
+
+
+
+
+        #x = np.hstack([xco, x[~pairs]])
+        #y = np.hstack([yco, y[~pairs]])
+        #xcoErr = np.hstack([xcoErr, errX[~pairs]])
+        #ycoErr = np.hstack([ycoErr, errY[~pairs]])
+        # fixme: Come back here and do something about tIndex!!
+        #sigCoX = np.zeros(len(x) - len(pairs), sigxp.shape[1])
+        '''
+
+        z = astigMAPism(stigLib, pipeline['clump'], pipeline['whichChan'], pipeline['sigmax'], pipeline['sigmay'])
 
 
 
