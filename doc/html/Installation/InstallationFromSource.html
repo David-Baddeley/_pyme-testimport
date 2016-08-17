@@ -1,0 +1,290 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Installation From Source &mdash; PYME 16.05.24 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '16.05.24',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="PYME 16.05.24 documentation" href="../index.html" />
+    <link rel="next" title="PYMEAcquire - Instrument control and simulation" href="../PYMEAcquire.html" />
+    <link rel="prev" title="Installation of PYME on 64 bit Windows, OSX, or Linux" href="InstallationWithAnaconda.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../PYMEAcquire.html" title="PYMEAcquire - Instrument control and simulation"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="InstallationWithAnaconda.html" title="Installation of PYME on 64 bit Windows, OSX, or Linux"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">PYME 16.05.24 documentation</a> &raquo;</li>
+<li><a href="http://lmsrv1/docwiki/docs/pyme-docs/Installation/InstallationFromSource.rst">Edit</a> &raquo;</li>
+ 
+
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/pymeLogo.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Installation From Source</a><ul>
+<li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li><a class="reference internal" href="#installing">Installing</a><ul>
+<li><a class="reference internal" href="#get-the-code">Get the code</a></li>
+<li><a class="reference internal" href="#build-and-install">Build and install</a></li>
+<li><a class="reference internal" href="#alternatively-if-you-re-going-to-fiddle-with-the-code">Alternatively, if you&#8217;re going to fiddle with the code</a></li>
+<li><a class="reference internal" href="#windows">Windows</a></li>
+<li><a class="reference internal" href="#linux-gnome">Linux (Gnome)</a></li>
+<li><a class="reference internal" href="#basic-configuration">Basic Configuration</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="InstallationWithAnaconda.html"
+                        title="previous chapter">Installation of PYME on 64 bit Windows, OSX, or Linux</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../PYMEAcquire.html"
+                        title="next chapter"><strong>PYMEAcquire</strong> - Instrument control and simulation</a></p>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="installation-from-source">
+<span id="installationfromsource"></span><h1>Installation From Source<a class="headerlink" href="#installation-from-source" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Permalink to this headline">¶</a></h2>
+<p>PYME requires:</p>
+<ul class="simple">
+<li>Python 2.7</li>
+<li>a c compiler (on windows I recommend the free <em>Visual C for python</em>, on linux or OSX just use the platform gcc)</li>
+<li>python-dev (only on Linux - has the Python development header files)</li>
+</ul>
+<p>and the following Python packages:</p>
+<ul class="simple">
+<li>Numpy</li>
+<li>Scipy</li>
+<li>Matplotlib</li>
+<li>wxPython (&gt;2.8.11)</li>
+<li>pytables</li>
+<li>Pyro (any 3.x version should work - the newer version 4 won&#8217;t)</li>
+<li>PyOpenGL</li>
+<li>PIL (Python Imaging Library)</li>
+<li>pywin32 (only req. on windows)</li>
+</ul>
+<p>For full functionality, the following are also useful:</p>
+<ul class="simple">
+<li>PySerial       [acquisition with real hardware]</li>
+<li>PyFFTW3</li>
+<li>MySQL-python   [sample DB server]</li>
+<li>Django (&gt;1.2)  [sample DB server]</li>
+<li>Django-south   [sample DB server]</li>
+<li>Mayavi2</li>
+<li>traits</li>
+<li>traits-ui</li>
+<li>Delny          [some <em>very</em> rarely used segmentation code]</li>
+<li>jinja2</li>
+<li>cherrypy</li>
+<li>scikit-image</li>
+<li>scikit-learn</li>
+<li>networkx</li>
+<li>toposort</li>
+<li>shapely</li>
+<li>zeroconf</li>
+<li>requests</li>
+<li>pandas</li>
+<li>yaml</li>
+</ul>
+<p>You&#8217;ll also want some form of mercurial client if checking out of the repository.</p>
+<p>On Windows and OSX the easiest way to get the pre-requisites is to
+install <a class="reference external" href="https://store.continuum.io/cshop/anaconda/">Anaconda</a> and to pull the remaining
+dependencies using <cite>conda install</cite> (see <a class="reference internal" href="InstallationWithAnaconda.html#installationanaconda"><span>Installation of PYME on 64 bit Windows, OSX, or Linux</span></a>). Other pre-packaged
+scientific python distributions (e.g. WinPython, PythonXY, Canopy) can also be used, although
+Anaconda seems to be the easiest. I would not reccomend trying to use the system python on OSX.</p>
+<p>Under linux you have the choice of using Anaconda (or similar), or using the default python install and
+the distribution packages for the dependencies. Depending on how old your distro is you might want to use
+pip/easy_install for some of the packages to get a more recent version instead
+(notably Pyro, and WxPython). Which choice you make is going to depend on your use case. If using it
+just for data analysis, then Anaconda might be easier. If you want to use the sample information database
+with apache and mod-python, then its likely to be easier to use the system python. Until recently I&#8217;ve always
+used the system python.</p>
+<p>Dependencies which cannot be fount using either the Anaconda channels, or system packages
+can be installed using <a class="reference external" href="http://pypi.python.org/pypi/pip">pip</a>. If using Anaconda, add the <cite>david_baddeley</cite>
+channel before resorting to pip as this should have most/all of the dependencies not included in Anaconda.</p>
+<p>There are a couple of (mostly historical) caveats:</p>
+<ul class="simple">
+<li>I have had problems with getting Delny to compile/install on Win/OSX, although
+this might have been fixed in the interim. It&#8217;s only required in PYME for some very rarely
+used functionality, so can usually be safely ignored.</li>
+<li>On some (most?) versions of windows, the network stack is broken. Pyro needs
+to be told about this by setting an environment variable - <code class="docutils literal"><span class="pre">PYRO_BROKEN_MSGWAITALL=1</span></code>.
+I can confirm that this is the case for pretty much every XP system, but can&#8217;t comment on Vista/7).
+Pyro falls back on another (slower) piece of code when this the flag is set,
+so it should be safe in any case. Can&#8217;t remember exactly how to diagnose the
+problem other than that Pyro falls over with cryptic error messages.</li>
+<li>All nodes on the network need to have the same version of Pyro</li>
+</ul>
+</div>
+<div class="section" id="installing">
+<h2>Installing<a class="headerlink" href="#installing" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="get-the-code">
+<h3>Get the code<a class="headerlink" href="#get-the-code" title="Permalink to this headline">¶</a></h3>
+<p>The code is stored in a mercurial repository. Get the current copy by doing</p>
+<div class="highlight-python"><div class="highlight"><pre>hg clone https://bitbucket.org/david_baddeley/python-microscopy
+</pre></div>
+</div>
+<p>or the equivalent using a gui client (eg <a class="reference external" href="http://tortoisehg.bitbucket.org/">TortoiseHG</a>).
+Alternatively download the tarball corresponding to a particular release and extract.</p>
+</div>
+<div class="section" id="build-and-install">
+<h3>Build and install<a class="headerlink" href="#build-and-install" title="Permalink to this headline">¶</a></h3>
+<p>Open a terminal, change to the directory where you extracted the source and execute:</p>
+<div class="highlight-python"><div class="highlight"><pre>python setup.py install
+</pre></div>
+</div>
+<p>.</p>
+</div>
+<div class="section" id="alternatively-if-you-re-going-to-fiddle-with-the-code">
+<h3>Alternatively, if you&#8217;re going to fiddle with the code<a class="headerlink" href="#alternatively-if-you-re-going-to-fiddle-with-the-code" title="Permalink to this headline">¶</a></h3>
+<p>This is mostly applicable when using the software for microscope control, where you
+are going to have to tweak some of the configuration codes.</p>
+<div class="highlight-python"><div class="highlight"><pre>python setup.py develop
+</pre></div>
+</div>
+</div>
+<div class="section" id="windows">
+<h3>Windows<a class="headerlink" href="#windows" title="Permalink to this headline">¶</a></h3>
+<p>If not already done by the setup script, create shortcuts somewhere (eg the start menu), to the following scripts:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">PYTHONDIR\Scripts\PYMEAquire.py</span></code> (data acquisition)</li>
+<li><code class="docutils literal"><span class="pre">PYTHONDIR\Scripts\launchWorkers.py</span></code> (real time analysis)</li>
+<li><code class="docutils literal"><span class="pre">PYTHONDIR\Scripts\dh5view.cmd</span></code> (raw data viewer)</li>
+<li><code class="docutils literal"><span class="pre">PYTHONDIR\Scripts\LMVis\VisGUI.cmd</span></code> (analysed data viewer)</li>
+</ul>
+<p>Where  <code class="docutils literal"><span class="pre">PYTHONDIR</span></code> is the location of your python installation (typically <code class="docutils literal"><span class="pre">c:\Python27</span></code> or similar)
+Optionally associate .h5 files with dh5view (will also open .tif,  .kdf &amp; .psf if you want)
+and .h5r files with VisGUI. I typically do this by clicking on one of the files,
+using the &#8216;Open With&#8217; option, and telling it to remember. If you&#8217;re using the
+sample database, you can also associate .pmu files with <code class="docutils literal"><span class="pre">PYTHONDIR\Scripts\pymeUrlOpener.cmd</span></code>.</p>
+</div>
+<div class="section" id="linux-gnome">
+<h3>Linux (Gnome)<a class="headerlink" href="#linux-gnome" title="Permalink to this headline">¶</a></h3>
+<p>Change to the <code class="docutils literal"><span class="pre">PYME/gnome</span></code> directory and run <code class="docutils literal"><span class="pre">install_gnome.sh</span></code>. This should
+(hopefully) set up
+associations and :) thumbnailing! With any luck, file permissions should be OK
+out of the repository, but there&#8217;s a chance you&#8217;re going to have to make a
+couple of the scripts executable.</p>
+</div>
+<div class="section" id="basic-configuration">
+<span id="basicconfig"></span><h3>Basic Configuration<a class="headerlink" href="#basic-configuration" title="Permalink to this headline">¶</a></h3>
+<p>In addition to the setup detailed above, PYME has a couple of configuration
+options which are controlled by environment variables. These are:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="25%" />
+<col width="75%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>PYMEDATADIR</td>
+<td>Default location where PYMEAcquire saves data. Eg
+<code class="docutils literal"><span class="pre">D:\</span></code>. Also place where other parts of analysis
+chain look for data.</td>
+</tr>
+<tr class="row-even"><td>PYMEMICRPATH</td>
+<td>Used with sample database to know where (on the local
+machine) the microscope computer is mapped.</td>
+</tr>
+<tr class="row-odd"><td>PYMENASPATH</td>
+<td>As for PYMEMICRPATH, but for the NAS</td>
+</tr>
+</tbody>
+</table>
+<p>When useing PYME for data acquisition you probably want to set at least PYMEDATADIR, as the default is not particularly useful.</p>
+<p>You should now have a setup which works for simulation*, data analysis, &amp; visualisation. Interfacing with hardware obviously requires a little more work - see <a class="reference internal" href="../ConfiguringPYMEAcquire.html#configuringpymeacquire"><span>Configuring PYME Acquire</span></a>.</p>
+<p>* simulation probably won&#8217;t work perfectly until you&#8217;ve done the EMGain calibration section of <a class="reference internal" href="../ConfiguringPYMEAcquire.html#configuringpymeacquire"><span>Configuring PYME Acquire</span></a>.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../PYMEAcquire.html" title="PYMEAcquire - Instrument control and simulation"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="InstallationWithAnaconda.html" title="Installation of PYME on 64 bit Windows, OSX, or Linux"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">PYME 16.05.24 documentation</a> &raquo;</li>
+<li><a href="http://lmsrv1/docwiki/docs/pyme-docs/Installation/InstallationFromSource.rst">Edit</a> &raquo;</li>
+ 
+
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, David Baddeley.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>
