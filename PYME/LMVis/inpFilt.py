@@ -37,7 +37,7 @@ import tables
 class inputFilter(object):
     def toDataFrame(self, keys=None):
         import pandas as pd
-        if keys == None:
+        if keys is None:
             keys = self.keys()
         
         d = {k: self.__getitem__(k) for k in keys}
@@ -337,7 +337,7 @@ class matfileSource(inputFilter):
         return self._keys
 
     def __getitem__(self, key):
-        key, sl = self._getKeySlice(keys)
+        key, sl = self._getKeySlice(key)
         if not key in self._keys:
             raise RuntimeError('Key not found')
 
@@ -461,7 +461,7 @@ class mappingFilter(inputFilter):
             return self.resultsSource[keys]
 
     def keys(self):
-        return list(self.resultsSource.keys()) + self.mappings.keys() + self.new_columns.keys()
+        return list(set(list(self.resultsSource.keys()) + self.mappings.keys() + self.new_columns.keys()))
 
     def addVariable(self, name, value):
         """
@@ -598,7 +598,7 @@ class cloneSource(inputFilter):
     def __init__(self, resultsSource):
         """Creates an in memory copy of a (filtered) data source"""
 
-        resultsSource
+        #resultsSource
         self.cache = {}
 
         for k in resultsSource.keys():
