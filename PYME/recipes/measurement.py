@@ -95,6 +95,7 @@ class FitPoints(ModuleBase):
     inputPositions = CStr('objPositions')
     outputName = CStr('fitResults')
     fitModule = CStr('LatGaussFitFR')
+    channel = Int(0)
 
     def execute(self, namespace):
         #from PYME.localization.FitFactories import DumbellFitR
@@ -128,7 +129,7 @@ class FitPoints(ModuleBase):
         for x, y, t, i in zip(inp['x'], inp['y'], inp['t'], range(len(inp['x']))):
             if not t == ff_t:
                 md['tIndex'] = t
-                ff = fitMod.FitFactory(img.data[:, :, t], md)
+                ff = fitMod.FitFactory(img.data[:, :, t, self.channel], md)
                 ff_t = t
 
             #print x/ps, y/ps
@@ -148,24 +149,37 @@ class IntensityAtPoints(ModuleBase):
     inputPositions = CStr('objPostiions')
     outputName = CStr('fitResults')
     radii = List([3, 5, 7, 9, 11])
+    mode = Enum(['sum', 'mean'])
     #fitModule = CStr('LatGaussFitFR')
 
+    def __init__(self, *args, **kwargs):
+        self._mask_cache = {}
+        ModuleBase.__init__(self, *args, **kwargs)
+
     def _get_mask(self, r):
-        if not '_mask_cache' in dir(self):
-            self._mask_cache = {}
+        #if not '_mask_cache' in dir(self):
+        #    self._mask_cache = {}
 
         if not r in self._mask_cache.keys():
             x_, y_ = np.mgrid[-r:(r+1.), -r:(r+1.)]
-            self._mask_cache[r] = 1.0*((x_*x_ + y_*y_) <= r*r)
+            self._mask_cache[r] = 1.0*((x_*x_ + y_*y_) < r*r)
 
         return self._mask_cache[r]
 
 
     def _get_mean(self, data, x, y, t, radius):
-        roi = data[(x-radius):(x + radius + 1), (y-radius):(y + radius + 1), t]
+        roi = data[(x-radius):(x + radius + 1), (y-radius):(y + radius + 1), t].squeeze()
         mask = self._get_mask(radius)
 
-        return (roi*mask).mean()
+        return (roi*mask).sum()/mask.sum()
+
+    def _get_sum(self, data, x, y, t, radius):
+        roi = data[(x - radius):(x + radius + 1), (y - radius):(y + radius + 1), t].squeeze()
+        mask = self._get_mask(radius)
+
+        #print mask.shape, roi.shape, (roi * mask).shape
+
+        return (roi * mask).sum()
 
     def execute(self, namespace):
         #from PYME.localization.FitFactories import DumbellFitR
@@ -190,11 +204,13 @@ class IntensityAtPoints(ModuleBase):
 
         ff_t = -1
 
+        aggFunc = getattr(self, '_get_%s' % self.mode)
+
         ps = img.pixelSize
         print('pixel size: %s' % ps)
         for x, y, t, i in zip(inp['x'], inp['y'], inp['t'], range(len(inp['x']))):
             for r in self.radii:
-                res[i]['r%d' % r] = self._get_mean(img.data, np.round(x/ps), np.round(y/ps), t, r)
+                res[i]['r%d' % r] = aggFunc(img.data, np.round(x / ps), np.round(y / ps), t, r)
 
         res = inpFilt.recArrayInput(res)
         res.mdh = md
@@ -443,7 +459,7 @@ class Measure2D(ModuleBase):
                     
                     self._keys.remove('euler_number') #buggy!
                     
-                    if not contours == None:
+                    if not contours is None:
                         self._keys += ['contour']
                         
                 self.measures.extend(measurements)
