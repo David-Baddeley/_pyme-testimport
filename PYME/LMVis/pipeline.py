@@ -82,7 +82,7 @@ class Pipeline:
         self.ready = False
         self.visFr = visFr
 
-        if not filename==None:
+        if not filename is None:
             self.OpenFile(filename)
             
         #renderers.renderMetadataProviders.append(self.SaveMetadata)
@@ -220,13 +220,15 @@ class Pipeline:
         if not 'foreShort' in dir(mapped_ds):
             mapped_ds.addVariable('foreShort', 1.)
 
-        if not 'focus' in mapped_ds.mappings.keys():
+        if not 'focus' in mapped_ds.keys():
             #set up a dummy focus variable if not already present
             mapped_ds.setMapping('focus', '0*x')
 
         if not 'z' in mapped_ds.keys():
             if 'fitResults_z0' in mapped_ds.keys():
                 mapped_ds.setMapping('z', 'fitResults_z0 + foreShort*focus')
+            elif 'astigZ' in mapped_ds.keys():
+                mapped_ds.setMapping('z', 'astigZ + foreShort*focus')
             else:
                 mapped_ds.setMapping('z', 'foreShort*focus')
 

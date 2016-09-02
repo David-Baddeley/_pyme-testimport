@@ -5,6 +5,7 @@ Created on Tue Dec 29 19:59:15 2015
 @author: david
 """
 from .base import register_module, ModuleBase, Filter, Float, Enum, CStr, Bool, Int, View, Item#, Group
+from traits.api import DictStrFloat, DictStrBool
 ##from PYME.IO.image import ImageStack
 import numpy as np
 import pandas as pd
@@ -39,7 +40,7 @@ class TrackFeatures(ModuleBase):
         
     @on_trait_change('pNew, r0, pLinkCutoff')    
     def OnParamChange(self):
-        if not self._tracker == None:
+        if not self._tracker is None:
             self._tracker.pNew=self.pNew
             self._tracker.r0 = self.r0
             self._tracker.linkageCuttoffProb = self.pLinkCutoff
@@ -50,7 +51,7 @@ class TrackFeatures(ModuleBase):
         
     def Track(self, objects, newTracker=False):
         """Track objects based on a given set of feature vectors"""
-        if (self._tracker == None) or not (len(self._tracker.t) == len(objects['t'])) or newTracker:
+        if (self._tracker is None) or not (len(self._tracker.t) == len(objects['t'])) or newTracker:
             featNames = [s.strip() for s in self.features.split(',')]
             
             def _calcWeights(s):
@@ -218,4 +219,28 @@ class ExtractTracks(ModuleBase):
             #clumpInfo.mdh = data.mdh
 
         #namespace[self.outputTrackInfo] = clumpInfo
+        namespace[self.outputTracks] = clumps
+
+@register_module('FitFusionTraces')
+class FitFusionTraces(ModuleBase):
+    """Extract tracks from a measurement set with pre-assigned clump IDs"""
+    inputTracks = CStr('tracks', desc='A clump / track manager object - with tracks corresponding to vesicle fusion events')
+    outputTracks = CStr('fusion_tracks', desc='A clump / track manager object - which has tracks with fusion info')
+    numLeadFrames = Int(10, desc='The number of frames which the profile extends before docking. This should be the same as in the LoadSpeckles module.')
+    numFollowFrames = Int(50, desc='The number of frames the trace extends after fusion. This should be the same as in the LoadSpeckles module.')
+    psfSigma = Float(1.5, desc='The std deviation of the microscope PSF, in pixels')
+    startParams = DictStrFloat(desc='a dictionary of parameters whose start value should be over-ridden')
+    paramsToFit = DictStrBool(desc='a dictionary of parameters whose fit status should be over-ridden. Use in conjunction with startParams to fix parameters at a given value')
+
+    def execute(self, namespace):
+        from PYME.experimental import fusionRadial
+        reload(fusionRadial)
+        tracks = namespace[self.inputTracks]
+
+        clumps = [fusionRadial.FusionTrack(c, numLeadFrames=self.numLeadFrames, numFollowFrames=self.numFollowFrames, sig=self.psfSigma,
+                              startParams=self.startParams, fitWhich=self.paramsToFit) for c in tracks]
+
+        if 'mdh' in dir(tracks):
+            pass
+
         namespace[self.outputTracks] = clumps
