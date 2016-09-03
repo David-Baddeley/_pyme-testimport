@@ -39,16 +39,20 @@ import requests
 import socket
 import fcntl
 import threading
+import datetime
+from PYME.misc.computerName import GetComputerName
+
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
-
-from PYME.misc.computerName import GetComputerName
 
 compName = GetComputerName()
 procName = compName + ' - PID:%d' % os.getpid()
 
 LOG_REQUESTS = False#True
+
+startTime = datetime.datetime.now()
+global_status = {}
 
 textfile_locks = {}
 def getTextFileLock(filename):
@@ -178,13 +182,16 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             #self.end_headers()
             return None
         else:
-            dir = os.path.split(path)[0]
+            dir, file = os.path.split(path)
             if not os.path.exists(dir):
                 os.makedirs(dir)
 
             query = urlparse.parse_qs(urlparse.urlparse(self.path).query)
 
-            if 'MirrorSource' in query.keys():
+            if file == '':
+                #we're  just making a directory
+                pass
+            elif 'MirrorSource' in query.keys():
                 #File content is not in message content. This computer should
                 #fetch the results from another computer in the cluster instead
                 #used for online duplication
@@ -205,6 +212,37 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
+    def do_GET(self):
+        """Serve a GET request."""
+        f = self.send_head()
+        if f:
+            try:
+                self.copyfile(f, self.wfile)
+            finally:
+                f.close()
+
+    def get_status(self):
+        from PYME.IO.FileUtils.freeSpace import disk_usage
+
+        status = {}
+        status.update(global_status)
+
+        total, used, free = disk_usage(os.getcwd())
+        status['Disk'] = {'total':total, 'used':used, 'free':free}
+        status['Uptime'] = datetime.datetime.now() - startTime
+
+
+        f = StringIO()
+        f.write(json.dumps(status))
+        length = f.tell()
+        f.seek(0)
+        self.send_response(200)
+        encoding = sys.getfilesystemencoding()
+        self.send_header("Content-type", "application/json; charset=%s" % encoding)
+        self.send_header("Content-Length", str(length))
+        self.end_headers()
+        return f
+
     def send_head(self):
         """Common code for GET and HEAD commands.
 
@@ -218,6 +256,8 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         """
         path = self.translate_path(self.path)
         f = None
+        if self.path.lstrip('/') == '__status':
+            return self.get_status()
         if os.path.isdir(path):
             parts = urlparse.urlsplit(self.path)
             if not parts.path.endswith('/'):
@@ -244,7 +284,7 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             # transmitted *less* than the content-length!
             f = open(path, 'rb')
         except IOError:
-            self.send_error(404, "File not found")
+            self.send_error(404, "File not found - %s, [%s]" % (self.path, path))
             return None
         try:
             self.send_response(200)
@@ -383,8 +423,19 @@ def main(protocol="HTTP/1.0"):
     ns = pzc.getNS('_pyme-http')
     ns.register_service('PYMEDataServer: ' + procName, ip_addr, sa[1])
 
+    global_status['IPAddress'] = ip_addr
+    global_status['BindAddress'] = server_address
+    global_status['Port'] = sa[1]
+    global_status['Protocol'] = options.protocol
+    global_status['TestMode'] = options.test
+    global_status['ComputerName'] = GetComputerName()
+
     print "Serving HTTP on", ip_addr, "port", sa[1], "..."
-    httpd.serve_forever()
+    try:
+        httpd.serve_forever()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 if __name__ == '__main__':
