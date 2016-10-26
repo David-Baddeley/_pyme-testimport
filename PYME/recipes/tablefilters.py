@@ -254,5 +254,34 @@ class MapAstigZ(ModuleBase):
 
         namespace[self.outputName] = mapped
 
+@register_module('idTransientFrames')
+class idTransientFrames(ModuleBase):
+    inputName = CStr('zmapped')
+    inputEvents = CStr('Events')
+    framesPerStep = Float()
+    outputName = CStr('transientFiltered')
+
+    def execute(self, namespace):
+        from PYME.experimental import eventFilterUtils
+
+        inp = namespace[self.inputName]
+
+        mapped = inpFilt.mappingFilter(inp)
+
+        if 'mdh' not in dir(inp):
+            if self.framesPerStep <= 0:
+                raise RuntimeError('idTransientFrames needs metadata')
+            else:
+                fps = self.framesPerStep
+        else:
+            fps = inp.mdh['StackSettings.FramesPerStep']
+
+        eventFilterUtils.idTransientFrames(mapped, namespace[self.inputEvents], fps)
+
+        mapped.mdh = inp.mdh
+
+        namespace[self.outputName] = mapped
+
+
 
 
