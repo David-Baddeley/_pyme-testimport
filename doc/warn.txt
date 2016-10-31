@@ -1,0 +1,7 @@
+/Users/david/python-microscopy/doc/Technical.rst:4: WARNING: toctree contains reference to nonexisting document u'FitModules'
+/Users/david/python-microscopy/doc/index.rst:7: WARNING: Explicit markup ends without a blank line; unexpected unindent.
+/Users/david/python-microscopy/doc/index.rst:58: WARNING: toctree contains reference to nonexisting document u'api/PYME'
+/Users/david/python-microscopy/doc/Installation/InstallationWithAnacondaNoConsole.rst:: WARNING: document isn't included in any toctree
+/Users/david/python-microscopy/doc/Technical.rst:: WARNING: document isn't included in any toctree
+/Users/david/python-microscopy/doc/dh5view.rst:: WARNING: document isn't included in any toctree
+WARNING: html_static_path entry u'/Users/david/python-microscopy/doc/_static' does not exist
