@@ -33,12 +33,15 @@ class ClusterAnalyser:
         self.pipeline = visFr.pipeline
         self.nearestNeighbourDistances = {}
         self.colocalizationRatios = {}
+        self.pairwiseDistances = {}
 
         visFr.AddMenuItem('Extras>DBSCAN', 'DBSCAN Clump', self.OnClumpDBSCAN,
                           helpText='')
         visFr.AddMenuItem('Extras>DBSCAN', 'Nearest Neighbor Distances- two-species', self.OnNearestNeighborTwoSpecies,
                           helpText='')
         visFr.AddMenuItem('Extras>DBSCAN', 'DBSCAN - find mixed clusters', self.OnFindMixedClusters,
+                          helpText='')
+        visFr.AddMenuItem('Extras', 'Pairwise Distance Histogram', self.OnPairwiseDistanceHistogram,
                           helpText='')
 
     def OnClumpDBSCAN(self, event=None):
@@ -122,6 +125,15 @@ class ClusterAnalyser:
         nchan = len(chans)
         if nchan < 2:
             raise RuntimeError('FindMixedClusters requires at least two color channels')
+        elif nchan > 2:
+            # select with GUI, as this allows flexibility of choosing which channel neighbor distances are with respect to
+            chan_dlg = wx.MultiChoiceDialog(self.visFr, 'Pick two color channels to find clusters containing both channels',
+                                          'Find mixed clusters channel selection', chans)
+            chan_dlg.SetSelections([0, 1])
+            if not chan_dlg.ShowModal() == wx.ID_OK:
+                return #need to handle cancel
+
+            selectedChans = chan_dlg.GetSelections()
         else:
             selectedChans = [0, 1]
 
@@ -159,6 +171,10 @@ class ClusterAnalyser:
         rec.add_module(tablefilters.DBSCANClustering(rec,inputName='joined', outputName='output',
                                                      searchRadius=searchRadius, minClumpSize=minClumpSize))
 
+        #configure parameters TODO - make this cleaner
+        import traitsui.api as tu
+        #v = tu.View(tu.Item('modules', editor=tu.ListEditor(use_notebook=True, view='pipeline_view'), style='custom', show_label=False),
+        #            buttons=['OK', 'Cancel'])
 
         rec.namespace['input'] = self.pipeline #do it before configuring so that we already have the channe; names populated
         if not rec.configure_traits(view=rec.pipeline_view, kind='modal'):
@@ -194,6 +210,68 @@ class ClusterAnalyser:
         self.colocalizationRatios['mixedClumps%i%i' % tuple(selectedChans)] = bothChanRatio
 
         self._rec = rec
+
+    def OnPairwiseDistanceHistogram(self, event=None):
+        from PYME.recipes import tablefilters, measurement
+        from PYME.recipes.base import ModuleCollection
+        import wx
+        import matplotlib.pyplot as plt
+
+        chans = self.pipeline.colourFilter.getColourChans()
+        nchan = len(chans)
+
+        if nchan > 0:
+            # select channels with GUI
+            chan_dlg = wx.MultiChoiceDialog(self.visFr, 'Pick channel(s) for pairwise distance calculations',
+                                          'Pairwise distance channel selection', chans)
+            chan_dlg.SetSelections([0, 1])
+            if not chan_dlg.ShowModal() == wx.ID_OK:
+                return  # need to handle cancel
+            selectedChans = [chans[ci] for ci in chan_dlg.GetSelections()]
+            nSel = len(selectedChans)
+            if nSel == 0 or nSel > 2:
+                raise RuntimeError('Pairwise distance histogram can only run on 1 or 2 channels')
+
+        else:
+            selectedChans = ['chan0', 'chan0']
+
+
+        # build a recipe programatically
+        distogram = ModuleCollection()
+
+        # split input according to colour channels selected
+        distogram.add_module(tablefilters.ExtractTableChannel(distogram, inputName='input', outputName='chan0',
+                                                              channel=selectedChans[0]))
+        distogram.add_module(tablefilters.ExtractTableChannel(distogram, inputName='input', outputName='chan1',
+                                                              channel=selectedChans[1]))
+
+        # Histogram
+        distogram.add_module(measurement.PairwiseDistanceHistogram(distogram, inputPositions='chan0',
+                                                                   inputPositions2='chan1', outputName='output'))
+
+        #configure parameters
+        import traitsui.api as tu
+
+        v = tu.View(tu.Item('modules',
+                            editor=tu.ListEditor(style='custom', editor=tu.InstanceEditor(view='pipeline_view'), mutable=False),
+                            style='custom',
+                            show_label=False),
+                    buttons=['OK', 'Cancel'])
+
+        if not distogram.configure_traits(view=v, kind='modal'):
+            return  # handle cancel
+
+        distogram.trait_views()
+
+        #run recipe
+        distances = distogram.execute(input=self.pipeline)
+
+        self.pairwiseDistances[tuple(selectedChans)] = {'counts': np.array(distances['counts']),
+                                                        'bins': np.array(distances['bins'] + 0.5*(distances['bins'][1] - distances['bins'][0]))}
+
+        plt.figure()
+        plt.bar(self.pairwiseDistances[tuple(selectedChans)]['bins'], self.pairwiseDistances[tuple(selectedChans)]['counts'])
+
 
 
 def Plug(visFr):
