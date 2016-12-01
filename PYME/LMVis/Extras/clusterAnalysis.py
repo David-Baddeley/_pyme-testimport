@@ -41,6 +41,8 @@ class ClusterAnalyser:
                           helpText='')
         visFr.AddMenuItem('Extras>DBSCAN', 'DBSCAN - find mixed clusters', self.OnFindMixedClusters,
                           helpText='')
+        visFr.AddMenuItem('Extras>DBSCAN', 'DBSCAN - clumps in time', self.OnClustersInTime,
+                          helpText='')
         visFr.AddMenuItem('Extras', 'Pairwise Distance Histogram', self.OnPairwiseDistanceHistogram,
                           helpText='')
 
@@ -229,6 +231,43 @@ class ClusterAnalyser:
 
         plt.figure()
         plt.bar(self.pairwiseDistances[selectedChans]['bins'], self.pairwiseDistances[selectedChans]['counts'])
+
+
+
+    def OnClustersInTime(self, event=None):
+        from PYME.recipes import tablefilters, measurement
+        from PYME.recipes.base import ModuleCollection
+        import matplotlib.pyplot as plt
+
+        # build a recipe programatically
+        rec = ModuleCollection()
+
+        # split input according to colour channel selected
+        rec.add_module(tablefilters.ExtractTableChannel(rec, inputName='input', outputName='chan0',
+                                                              channel='chan0'))
+
+        rec.add_module(measurement.ClumpsInTime(rec, inputName='chan0', stepSize=3000, searchRadius=75,
+                                                minPtsForCore=3, outputName='output'))
+
+
+        rec.namespace['input'] = self.pipeline #do before configuring so that we already have the channel names populated
+        #configure parameters
+        if not rec.configure_traits(view=rec.pipeline_view, kind='modal'):
+            return #handle cancel
+
+        incrementedClumps = rec.execute()
+
+        plt.figure()
+        plt.scatter(incrementedClumps['t'], incrementedClumps['N_origClustersWithMinPoints'],
+                    label='Original Clusters with N > minPts', edgecolors='r', facecolors='none', marker='s')
+        plt.scatter(incrementedClumps['t'], incrementedClumps['N_rawDBSCAN'], label='raw DBSCAN', edgecolors='b',
+                    facecolors='b', marker='x')
+        plt.scatter(incrementedClumps['t'], incrementedClumps['N_origClusterWithMinPointsDBSCAN'],
+                    label='DBSCAN on points in og clusters with N> minPts', edgecolors='g', facecolors='none')
+        plt.legend(loc=4, scatterpoints=1)
+        plt.xlabel('Number of frames included')
+        plt.ylabel('Number of Clusters')
+        plt.title('minPoints=%i, searchRadius = %.0f nm' % (rec.modules[-1].minPtsForCore, rec.modules[-1].searchRadius))
 
 
 
