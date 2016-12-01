@@ -701,5 +701,93 @@ class AggregateMeasurements(ModuleBase):
             res.mdh = meas1.mdh
             
         namespace[self.outputName] = res
+
+
+@register_module('ClumpsInTime')
+class ClumpsInTime(ModuleBase):
+    """
+    ClumpsInTime first runs DBSCAN on the pipeline output (which in general will contain all frames), which is refered
+    to as the original DBSCAN. Then the pipeline output is iteratively filtered on t before subsequent DBSCANs on the
+    first XX frames.
+
+    args:
+        stepSize: number of frames to add in on each iteration
+        searchRadius: search radius for clustering
+        minPtsForCore: number of points within SearchRadius required for a given point to be considered a core point
+
+    returns:
+        pandas dataframe with the following keys:
+            t: upper bound on frame number included in calculations on each iteration.
+            N_rawDBSCAN: number of unique labels returned by dbscan on each iteration.
+            N_origClustersWithMinPoints: number of original (all frames included) DBSCAN labels comprising of at least
+                minPtsForCore points. NB - this is not always the same as the number of labels (see below)!
+            N_origClusterWithMinPointsDBSCAN: number of unique labels returned by running dbscan on each iteration after
+                filtering out all original clusters that do not contain minPtsForCore number of points.
+
+    From wikipedia: "While minPts intuitively is the minimum cluster size, in some cases DBSCAN can produce smaller
+    clusters. A DBSCAN cluster consists of at least one core point. As other points may be border points to more than
+    one cluster, there is no guarantee that at least minPts points are included in every cluster."
+    """
+    inputName = Input('input')
+    stepSize = Int(3000)
+    minPtsForCore = Int(3)
+    searchRadius = Float(75)
+    outputName = Output('incremented')
+
+    def execute(self, namespace):
+        from PYME.IO import tabular
+        from sklearn.cluster import dbscan
+
+        iters = (int(np.max(namespace[self.inputName]['t']))/int(self.stepSize)) + 2
+
+        clumpCount = np.empty(iters)
+        clumpCount[0] = 0
+        t = np.empty_like(clumpCount)
+        t[0] = 0
+        origClustersWithMinPoints = np.empty_like(clumpCount)
+        origClustersWithMinPoints[0] = 0
+        origClusterDBSCAN = np.empty_like(clumpCount)
+        origClusterDBSCAN[0] = 0
+
+
+        core_samp, dbLabelsOrig = dbscan(np.vstack([namespace[self.inputName]['x'], namespace[self.inputName]['y'], namespace[self.inputName]['z']]).T,
+                                         self.searchRadius, self.minPtsForCore)
+        inp = tabular.mappingFilter(namespace[self.inputName])
+        inp.addColumn('DBSCAN_allFrames', dbLabelsOrig)
+
+        for ind in range(1, iters):  # start from 1 since t=[0,0] will yield no clumps
+            # filter time
+            inc = tabular.resultsFilter(inp, t=[0, self.stepSize*ind])
+            t[ind] = np.max(inc['t'])
+
+            cid, counts = np.unique(inc['DBSCAN_allFrames'], return_counts=True)
+
+            cmask = np.in1d(inc['DBSCAN_allFrames'], cid)
+            core_samp, dbLabels = dbscan(np.vstack([inc['x'][cmask], inc['y'][cmask], inc['z'][cmask]]).T,
+                                         self.searchRadius, self.minPtsForCore)
+            clumpCount[ind] = len(np.unique(dbLabels[dbLabels > -0.5]))
+
+            # Now only look at original clumps that at least contain minPts
+            cid = cid[counts >= self.minPtsForCore]
+            origClustersWithMinPoints[ind] = np.sum(cid != -1)  # ignore unclumped in count
+
+            # regenerate mask ignoring og clumps that don't contain minPts pts
+            cmask = np.in1d(inc['DBSCAN_allFrames'], cid)
+            core_samp, dbLabelsFilt = dbscan(np.vstack([inc['x'][cmask], inc['y'][cmask], inc['z'][cmask]]).T,
+                                         self.searchRadius, self.minPtsForCore)
+
+            origClusterDBSCAN[ind] = len(np.unique(dbLabelsFilt[dbLabelsFilt > -0.5]))
+
+
+        res = tabular.resultsFilter({'t': t, 'N_rawDBSCAN': clumpCount, 'N_origClustersWithMinPoints': origClustersWithMinPoints,
+                                   'N_origClusterWithMinPointsDBSCAN': origClusterDBSCAN})
+
+        # propagate metadata, if present
+        try:
+            res.mdh = namespace[self.inputName].mdh
+        except AttributeError:
+            pass
+
+        namespace[self.outputName] = res
         
 
