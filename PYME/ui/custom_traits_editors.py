@@ -19,17 +19,19 @@ class _CBEditor (Editor):
 
         self.control = wx.ComboBox(parent,
                                    size=(120,-1),
-                                   style = wx.CB_DROPDOWN, value=self.value, choices=self.factory.choices)
+                                   style = wx.CB_DROPDOWN|wx.CB_SORT, value=self.value, choices=self.factory.choices)
         self.control.Bind(wx.EVT_COMBOBOX, self.text_changed)
+        #self.control.Bind(wx.EVT_COMBOBOX_CLOSEUP, lambda e: print('foo'))
         self.control.Bind(wx.EVT_TEXT, self.text_changed)
         return
 
 
-    def text_changed(self, event):
+    def text_changed(self, event=None):
         """
         Event for when calendar is selected, update/create date string.
         """
         self.value = self.control.GetValue()
+        print self.value
         return
 
 

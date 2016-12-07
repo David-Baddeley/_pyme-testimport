@@ -113,7 +113,11 @@ class Pipelineify(ModuleBase):
             mapped_ds.setMapping('y', 'y*pixelSize')
 
         #extract information from any events
-        ev_maps, ev_charts = pipeline._processEvents(mapped_ds, namespace.get(self.inputEvents, None), mdh)
+        events = namespace.get(self.inputEvents, None)
+        if isinstance(events, tabular.TabularBase):
+            events = events.to_recarray()
+
+        ev_maps, ev_charts = pipeline._processEvents(mapped_ds, events, mdh)
         pipeline._add_missing_ds_keys(mapped_ds, ev_maps)
 
         #Fit module specific filter settings
@@ -128,9 +132,16 @@ class Pipelineify(ModuleBase):
         namespace[self.outputLocalizations] = mapped_ds
 
 
-@register_module('Fold') #FIXME - move to multi-view specific module and potentially rename
-class Fold(ModuleBase):
-    """Create a new mapping object which derives mapped keys from original ones"""
+@register_module('MultiviewFold') #FIXME - move to multi-view specific module and potentially rename
+class MultiviewFold(ModuleBase):
+    """Fold localizations from images which have been taken with an image splitting device but analysed without channel
+    awareness.
+
+    Images taken in this fashion will have the channels side by side. This module folds the x co-ordinate to overlay the
+    different channels, using the image metadata to determine the appropriate ROI boundaries. The current implementation
+    is somewhat limited as it only handles folding along the x axis, and assumes that ROI sizes and spacings are completely
+    uniform.
+    """
     inputName = Input('localizations')
     outputName = Output('folded')
 
@@ -142,19 +153,18 @@ class Fold(ModuleBase):
         if 'mdh' not in dir(inp):
             raise RuntimeError('Unfold needs metadata')
 
-        mapped = tabular.mappingFilter(inp)
-
-        multiview.foldX(mapped, inp.mdh)
+        mapped = multiview.foldX(inp, inp.mdh)
         mapped.mdh = inp.mdh
 
         namespace[self.outputName] = mapped
 
 
-@register_module('ShiftCorrect') #FIXME - move to multi-view specific module and rename OR make consistent with existing shift correction
-class ShiftCorrect(ModuleBase):
-    """Create a new mapping object which derives mapped keys from original ones"""
+@register_module('MultiviewShiftCorrect') #FIXME - move to multi-view specific module and rename OR make consistent with existing shift correction
+class MultiviewShiftCorrect(ModuleBase):
+    """Applies chromatic shift correction to folded localization data that was acquired with an image splitting device,
+    but localized without splitter awareness."""
     inputName = Input('folded')
-    inputShiftMap = CStr('') #FIXME - change name to indicate that this is a filename/path/URL. Should probably be a File trait (or derived class which deals with clusterIO)
+    shiftMapLocation = CStr('') #FIXME - change name to indicate that this is a filename/path/URL. Should probably be a File trait (or derived class which deals with clusterIO)
     outputName = Output('registered')
 
     def execute(self, namespace):
@@ -167,16 +177,21 @@ class ShiftCorrect(ModuleBase):
         if 'mdh' not in dir(inp):
             raise RuntimeError('ShiftCorrect needs metadata')
 
-        if self.inputShiftMap == '':  # grab shftmap from the metadata
+        if self.shiftMapLocation == '':  # grab shftmap from the metadata
             s = unifiedIO.read(inp.mdh['Shiftmap'])
         else:
-            s = unifiedIO.read(self.inputShiftMap)
+            s = unifiedIO.read(self.shiftMapLocation)
 
         shiftMaps = json.loads(s)
 
         mapped = tabular.mappingFilter(inp)
 
-        multiview.applyShiftmaps(mapped, shiftMaps)  # FIXME: parse mdh for camera.ROIX
+        dx, dy = multiview.calcShifts(mapped, shiftMaps)
+        mapped.addColumn('chromadx', dx)
+        mapped.addColumn('chromady', dy)
+
+        mapped.setMapping('x', 'x + chromadx')
+        mapped.setMapping('y', 'y + chromady')
 
         mapped.mdh = inp.mdh
 
@@ -197,15 +212,11 @@ class FindClumps(ModuleBase):
 
         inp = namespace[self.inputName]
 
-
-        #    raise RuntimeError('Unfold needs metadata')
-
-        mapped = tabular.mappingFilter(inp)
         try:
-            multiview.multicolorFindClumps(mapped, self.gapTolerance, self.radiusScale, self.radius_offset_nm)
+            mapped = multiview.findClumps(inp, self.gapTolerance, self.radiusScale, self.radius_offset_nm)
         except KeyError:
-            multiview.findClumps(mapped, self.gapTolerance, self.radiusScale, self.radius_offset_nm)
-
+            mapped = multiview.multicolorFindClumps(inp, self.gapTolerance, self.radiusScale, self.radius_offset_nm)
+        
         if 'mdh' in dir(inp):
             mapped.mdh = inp.mdh
 
@@ -223,12 +234,12 @@ class MergeClumps(ModuleBase):
 
         inp = namespace[self.inputName]
 
-        mapped = tabular.mappingFilter(inp)
+        #mapped = tabular.mappingFilter(inp)
 
         if 'mdh' not in dir(inp):
             raise RuntimeError('MergeClumps needs metadata')
 
-        grouped = multiview.mergeClumps(mapped, inp.mdh.getOrDefault('Multiview.NumROIs', 0))
+        grouped = multiview.mergeClumps(inp, inp.mdh.getOrDefault('Multiview.NumROIs', 0))
 
         grouped.mdh = inp.mdh
 
@@ -239,7 +250,7 @@ class MergeClumps(ModuleBase):
 class MapAstigZ(ModuleBase):
     """Create a new mapping object which derives mapped keys from original ones"""
     inputName = Input('merged')
-    AstigmatismMapID = CStr('') #FIXME - rename and possibly change type
+    astigmatismMapLocation = CStr('') #FIXME - rename and possibly change type
     outputName = Output('zmapped')
 
     def execute(self, namespace):
@@ -252,10 +263,10 @@ class MapAstigZ(ModuleBase):
         if 'mdh' not in dir(inp):
             raise RuntimeError('MapAstigZ needs metadata')
 
-        if self.AstigmatismMapID == '':  # grab calibration from the metadata
+        if self.astigmatismMapLocation == '':  # grab calibration from the metadata
             s = unifiedIO.read(inp.mdh['Analysis.AstigmatismMapID'])
         else:
-            s = unifiedIO.read(self.AstigmatismMapID)
+            s = unifiedIO.read(self.astigmatismMapLocation)
 
         astig_calibrations = json.loads(s)
 

@@ -46,7 +46,7 @@ def coalesceDictSorted(inD, assigned, keys, weights_by_key):  # , notKosher=None
     return clumped
 
 
-def foldX(datasource, mdh):
+def foldX(datasource, mdh, inject=False, chroma_mappings=False):
     """
 
     At this point the origin of x should be the corner of the concatenated frame
@@ -59,6 +59,10 @@ def foldX(datasource, mdh):
         Adds channel assignments to the datasource
 
     """
+    from PYME.IO import tabular
+    if not inject:
+        datasource = tabular.mappingFilter(datasource)
+
     roiSizeNM = (mdh['Multiview.ROISize'][1]*mdh['voxelsize.x']*1000)  # voxelsize is in um
 
     numChans = mdh.getOrDefault('Multiview.NumROIs', 1)
@@ -72,8 +76,14 @@ def foldX(datasource, mdh):
 
     #FIXME - cast to int should probably happen when we use multiViewChannel, not here (because we might have saved and reloaded in between)
     datasource.setMapping('multiviewChannel', 'clip(floor(x/roiSizeNM), 0, numChannels - 1).astype(int)')
-    datasource.setMapping('x', 'x%roiSizeNM + chromadx')
-    datasource.setMapping('y', 'y + chromady')
+    if chroma_mappings:
+        datasource.addColumn('chromadx', 0 * datasource['x'])
+        datasource.addColumn('chromady', 0 * datasource['y'])
+
+        datasource.setMapping('x', 'x%roiSizeNM + chromadx')
+        datasource.setMapping('y', 'y + chromady')
+    else:
+        datasource.setMapping('x', 'x%roiSizeNM')
 
     probe = color_chans[datasource['multiviewChannel']] #should be better performance
     datasource.addColumn('probe', probe)
@@ -94,20 +104,9 @@ def foldX(datasource, mdh):
         #lets add some more that might be useful
         #datasource.setMapping('A%d' % chan, 'chan%d*A' % chan)
 
-def applyShiftmaps(datasource, shiftWallet):  # FIXME: add metadata for camera roi positions
-    """
-    applyShiftmaps loads multiview shiftmap parameters from multiviewMapper.shiftWallet, reconstructs the shiftmap
-    objects, applies them to the multiview data, and maps the positions registered to the first channel to the pipeline
+    return datasource
 
-    Args:
-        x: vector of localization x-positions
-        y: vector of localization y-positions
-        numChan: number of multiview channels
-
-    Returns: nothing
-        Adds shifts into the pipeline which will then be applied automatically by the mappingFilter (see foldX)
-
-    """
+def calcShifts(datasource, shiftWallet):
     import importlib
     model = shiftWallet['shiftModel'].split('.')[-1]
     shiftModule = importlib.import_module(shiftWallet['shiftModel'].split('.' + model)[0])
@@ -127,14 +126,34 @@ def applyShiftmaps(datasource, shiftWallet):  # FIXME: add metadata for camera r
     dy = 0
     for ii in range(1, numChan + 1):
         chanMask = chan == ii
-        dx = dx + chanMask*shiftModel(dict=shiftWallet['Chan0%s.X' % ii]).ev(x, y)
-        dy = dy + chanMask*shiftModel(dict=shiftWallet['Chan0%s.Y' % ii]).ev(x, y)
+        dx = dx + chanMask * shiftModel(dict=shiftWallet['Chan0%s.X' % ii]).ev(x, y)
+        dy = dy + chanMask * shiftModel(dict=shiftWallet['Chan0%s.Y' % ii]).ev(x, y)
+
+    return dx, dy
+
+def applyShiftmaps(datasource, shiftWallet):  # FIXME: add metadata for camera roi positions
+    """
+    applyShiftmaps loads multiview shiftmap parameters from multiviewMapper.shiftWallet, reconstructs the shiftmap
+    objects, applies them to the multiview data, and maps the positions registered to the first channel to the pipeline
+
+    Args:
+        x: vector of localization x-positions
+        y: vector of localization y-positions
+        numChan: number of multiview channels
+
+    Returns: nothing
+        Adds shifts into the pipeline which will then be applied automatically by the mappingFilter (see foldX)
+
+    """
+    dx, dy = calcShifts(datasource, shiftWallet)
 
     datasource.addColumn('chromadx', dx)
     datasource.addColumn('chromady', dy)
 
-def findClumps(datasource, gap_tolerance, radius_scale, radius_offset):
+
+def findClumps(datasource, gap_tolerance, radius_scale, radius_offset, inject=False):
     from PYME.Analysis.points.DeClump import deClump
+    from PYME.IO import tabular
     t = datasource['t'] #OK as int
     clumps = np.zeros(len(t), 'i')
     I = np.argsort(t)
@@ -147,9 +166,12 @@ def findClumps(datasource, gap_tolerance, radius_scale, radius_offset):
     assigned = deClump.findClumpsN(t, x, y, deltaX, gap_tolerance)
     clumps[I] = assigned
 
+    if not inject:
+        datasource = tabular.mappingFilter(datasource)
+
     datasource.addColumn('clumpIndex', clumps)
 
-def multicolorFindClumps(datasource, gap_tolerance, radius_scale, radius_offset):
+def multicolorFindClumps(datasource, gap_tolerance, radius_scale, radius_offset, inject=False):
     """
 
     Args:
@@ -164,6 +186,7 @@ def multicolorFindClumps(datasource, gap_tolerance, radius_scale, radius_offset)
 
     """
     from PYME.Analysis.points.DeClump import deClump
+    from PYME.IO import tabular
     t = datasource['t'] #OK as int
     clumps = np.zeros(len(t), 'i')
     I = np.argsort(t)
@@ -191,15 +214,21 @@ def multicolorFindClumps(datasource, gap_tolerance, radius_scale, radius_offset)
         startAt = np.max(assigned)
     clumps[I] = assigned
 
+    if not inject:
+        datasource = tabular.mappingFilter(datasource)
+
     datasource.addColumn('clumpIndex', clumps)
 
 
 def mergeClumps(datasource, numChan):
-    from PYME.IO.tabular import cachingResultsFilter
+    from PYME.IO.tabular import cachingResultsFilter, mappingFilter
 
-    keys_to_aggregate = ['x', 'y', 'z', 't', 'A', 'probe', 'tIndex', 'multiviewChannel', 'clumpIndex']
+    keys_to_aggregate = ['x', 'y', 'z', 't', 'A', 'probe', 'tIndex', 'multiviewChannel', 'clumpIndex', 'focus']
     keys_to_aggregate += ['sigmax%d' % chan for chan in range(numChan)]
     keys_to_aggregate += ['sigmay%d' % chan for chan in range(numChan)]
+
+    ds_keys = datasource.keys()
+    keys_to_aggregate = [k for k in keys_to_aggregate if k in ds_keys] #discard any keys which are not in the underlying datasource
 
     all_keys = list(keys_to_aggregate) #this should be a copy otherwise we end up adding the weights to our list of stuff to aggregate
 
@@ -213,7 +242,7 @@ def mergeClumps(datasource, numChan):
     sorted_src = {k: datasource[k][I] for k in all_keys}
 
     grouped = coalesceDictSorted(sorted_src, sorted_src['clumpIndex'], keys_to_aggregate, aggregation_weights)
-    return cachingResultsFilter(grouped)
+    return mappingFilter(grouped)
 
 
 
