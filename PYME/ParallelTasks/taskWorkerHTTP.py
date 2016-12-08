@@ -73,6 +73,7 @@ from PYME.ParallelTasks import distribution
 
 #import here to pre-populate the zeroconf nameserver
 from PYME.IO import clusterIO
+from PYME.IO import unifiedIO
 #time.sleep(3)
 
 
@@ -200,6 +201,7 @@ def main():
         #del results
 
 
+
 class taskWorker(object):
     def __init__(self):
         self.inputQueue = Queue.Queue()
@@ -249,6 +251,14 @@ class taskWorker(object):
                         r = s.post(queueURL + 'node/handin?taskID=%s&status=failure' % taskDescr['id'])
                         if not r.status_code == 200:
                             logger.error('Returning task failed with error: %s' % r.status_code)
+                    elif res == True: #isinstance(res, ModuleCollection): #recipe output
+                        #res.save(outputs) #abuse outputs dictionary as context
+
+                        s = clusterIO._getSession(queueURL)
+                        r = s.post(queueURL + 'node/handin?taskID=%s&status=success' % taskDescr['id'])
+                        if not r.status_code == 200:
+                            logger.error('Returning task failed with error: %s' % r.status_code)
+
                     else:
                         #success
                         if 'results' in outputs.keys():
@@ -327,6 +337,37 @@ class taskWorker(object):
                     res = task()
 
                     self.resultsQueue.put((queueURL, taskDescr, res))
+
+                except:
+                    import traceback
+                    traceback.print_exc()
+                    logger.exception(traceback.format_exc())
+
+                    self.resultsQueue.put((queueURL, taskDescr, None))
+
+            elif taskDescr['type'] == 'recipe':
+                from PYME.recipes.modules import ModuleCollection
+
+                try:
+                    taskdefRef = taskDescr.get('taskdefRef', None)
+                    if taskdefRef: #recipe is defined in a file - go find it
+                        recipe_yaml = unifiedIO.read(taskdefRef)
+                        recipe = ModuleCollection.fromYAML(recipe_yaml)
+                    else: #recipe is defined in the task
+                        recipe = ModuleCollection.fromYAML(taskDescr['taskdef']['recipe'])
+
+                    #load recipe inputs
+                    for key, url in taskDescr['inputs']:
+                        recipe.loadInput(url, key)
+
+                    recipe.execute()
+
+                    #save results
+                    context = {'data_root' : clusterIO.local_dataroot,}
+                    context.update(taskDescr['outputs']) #abuse outputs as context
+                    recipe.save(context)
+
+                    self.resultsQueue.put((queueURL, taskDescr, True))
 
                 except:
                     import traceback

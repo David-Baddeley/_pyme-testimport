@@ -6,7 +6,7 @@ Created on Mon May 25 17:02:04 2015
 """
 #import wx
 
-from PYME.recipes.traits import HasTraits, Float, List, Bool, Int, CStr, on_trait_change, Input, Output
+from PYME.recipes.traits import HasTraits, Float, List, Bool, Int, CStr, Enum, on_trait_change, Input, Output
     
     #for some reason traitsui raises SystemExit when called from sphinx on OSX
     #This is due to the framework build problem of anaconda on OSX, and also
@@ -21,6 +21,9 @@ from PYME.recipes.traits import HasTraits, Float, List, Bool, Int, CStr, on_trai
 
 from PYME.IO.image import ImageStack
 import numpy as np
+
+import logging
+logger = logging.getLogger(__name__)
 
 all_modules = {}
 _legacy_modules = {}
@@ -148,7 +151,18 @@ class ModuleBase(HasTraits):
 
 class OutputModule(ModuleBase):
     filePattern = CStr('{output_dir}/{file_stub}.csv')
-    #scheme = Enum('File', 'pyme-cluster://', 'pyme-cluster://_aggregate_h5r/')
+    scheme = Enum('File', 'pyme-cluster://', 'pyme-cluster:// - aggregate')
+
+    def _schemafy_filename(self, out_filename):
+        if self.scheme == 'File':
+            return out_filename
+        elif self.scheme == 'pyme-cluster://':
+            from PYME.IO import clusterIO
+            import os
+            return os.path.join(clusterIO.local_dataroot, out_filename.lstrip('/'))
+        elif self.scheme == 'pyme-cluster:// - aggregate':
+            raise RuntimeError('Aggregation not suported')
+
 
     def execute(self, namespace):
         """
@@ -296,8 +310,7 @@ class ModuleCollection(HasTraits):
             
         return c
         
-    def toYAML(self):
-        import yaml
+    def get_cleaned_module_list(self):
         l = []
         for mod in self.modules:
             #l.append({mod.__class__.__name__: mod.get()})
@@ -315,31 +328,27 @@ class ModuleCollection(HasTraits):
                     mod_traits_cleaned[k] = v
 
             l.append({module_names[mod.__class__]: mod_traits_cleaned})
-            
-        return yaml.safe_dump(l, default_flow_style=False)
+
+        return l
+
+
+    def toYAML(self):
+        import yaml
+        return yaml.safe_dump(self.get_cleaned_module_list(), default_flow_style=False)
         
     def toJSON(self):
         import json
-        l = []
-        for mod in self.modules:
-            #l.append({mod.__class__.__name__: mod.get()})
-            l.append({module_names[mod.__class__]: mod.get()})
-            
-        return json.dumps(l)
+        return json.dumps(self.get_cleaned_module_list())
     
     @classmethod
-    def fromYAML(cls, data):
-        import yaml
-        
+    def from_module_list(cls, l):
         c = cls()
-        
-        l = yaml.load(data)
-        
+
         mc = []
-        
+
         if l is None:
             l = []
-        
+
         for mdd in l:
             mn, md = mdd.items()[0]
             try:
@@ -351,10 +360,22 @@ class ModuleCollection(HasTraits):
 
             mod.set(**md)
             mc.append(mod)
-            
+
         c.modules = mc
-            
-        return c#cls(modules=mc)
+        return c
+
+    @classmethod
+    def fromYAML(cls, data):
+        import yaml
+
+        l = yaml.load(data)
+        return cls.from_module_list(l)
+
+    @classmethod
+    def fromJSON(cls, data):
+        import json
+        return cls.from_module_list(json.loads(data))
+
 
     def add_module(self, module):
         self.modules.append(module)
@@ -393,6 +414,43 @@ class ModuleCollection(HasTraits):
         for mod in self.modules:
             if isinstance(mod, OutputModule):
                 mod.save(self.namespace, context)
+
+    def loadInput(self, filename, key='input'):
+        """Load input data from a file and inject into namespace
+
+        Currently only handles images (anything you can open in dh5view). TODO -
+        extend to other types.
+        """
+        #modify this to allow for different file types - currently only supports images
+        from PYME.IO import unifiedIO
+        if filename.endswith('.h5r'):
+            import tables
+            from PYME.IO import MetaDataHandler
+            from PYME.IO import tabular
+
+            with unifiedIO.local_or_temp_filename(filename) as fn:
+                h5f = tables.open_file(fn)
+
+                key_prefix = '' if key == 'input' else key + '_'
+
+                mdh = MetaDataHandler.NestedClassMDHandler(MetaDataHandler.HDFMDHandler(h5f))
+                for t in h5f.list_nodes('/'):
+                    if isinstance(t, tables.table.Table):
+                        tab = tabular.h5rSource(h5f, t.name)
+                        tab.mdh = mdh
+
+                        self.namespace[key_prefix + t.name] = tab
+
+                        #logger.error('loading h5r not supported yet')
+                        #raise NotImplementedError
+        elif filename.endswith('.csv'):
+            logger.error('loading .csv not supported yet')
+            raise NotImplementedError
+        elif filename.endswith('.xls') or filename.endswith('.xlsx'):
+            logger.error('loading .xls not supported yet')
+            raise NotImplementedError
+        else:
+            self.namespace[key] = ImageStack(filename=filename, haveGUI=False)
 
 
     @property
