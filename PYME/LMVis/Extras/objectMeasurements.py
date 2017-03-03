@@ -32,6 +32,23 @@ class ParticleTracker:
 
 
     def OnGetIDs(self, event):
+        """
+
+        Function to propagate labels from a segmented image (or stack of images) to localizations within the pipeline.
+        Localizations in the same area (or volume) of image.ImageStack labels will be given the same 'ObjectID' as that
+        label. The ImageStack containing labels is selected through the GUI.
+
+        Parameters
+        ----------
+        event: GUI event
+
+        Returns
+        -------
+        Nothing, but adds ObjectID and NEvents columns to the pipeline
+            ObjectID: Label number from image, mapped to each localization within that label
+            NEvents: Number of localizations within the label that a given localization belongs to
+
+        """
         from PYME.IO import image
 
         visFr = self.visFr
