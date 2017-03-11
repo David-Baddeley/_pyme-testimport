@@ -188,19 +188,20 @@ def get_plugins(application):
     list of fully resolved module paths
 
     """
+    import glob
     plugin_paths = []
 
     for config_dir in config_dirs:
         plugin_dir = os.path.join(config_dir, 'plugins', application)
 
         try:
-            reg_files = os.listdir(plugin_dir)
+            reg_files = glob.glob(os.path.join(plugin_dir, '*.txt'))
         except OSError:
             reg_files = []
 
         for fn in reg_files:
             with open(fn, 'r') as f:
-                plugin_paths.append(f.readlines())
+                plugin_paths.extend(f.readlines())
 
     return  list(set([p.strip() for p in plugin_paths if not p.strip() == '']))
 
