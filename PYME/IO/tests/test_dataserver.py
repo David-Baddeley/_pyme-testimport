@@ -61,9 +61,19 @@ def test_double_put():
     
 def test_aggregate_h5r():
     import numpy as np
-    from . import clusterResults
+    from PYME.IO import clusterResults
     testdata = np.ones(10, dtype=[('a', '<f4'), ('b', '<f4')])
     
     clusterResults.fileResults('pyme-cluster://TEST/__aggregate_h5r/_testing/test_results.h5r/foo', testdata)
     clusterResults.fileResults('pyme-cluster://TEST/__aggregate_h5r/_testing/test_results.h5r/foo', testdata)
     clusterResults.fileResults('pyme-cluster://TEST/__aggregate_h5r/_testing/test_results.h5r/foo', testdata)
+
+
+def test_dircache_purge():
+    testdata = 'foo bar\n'
+    for i in range(1050):
+        clusterIO.putFile('_testing/lots_of_folders/test_%d/test.txt' % i, testdata, 'TEST')
+    
+        listing = clusterIO.listdir('_testing/lots_of_folders/test_%d/' % i)
+    
+    #assert (len(listing) == 10)
