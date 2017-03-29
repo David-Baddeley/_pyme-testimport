@@ -20,10 +20,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ##################
-
 import numpy
 import numpy as np
-import pylab
 import wx
 import wx.glcanvas
 from OpenGL.GL import *
@@ -33,11 +31,14 @@ from PYME.LMVis.Layer.AxesOverlayLayer import AxesOverlayLayer
 from PYME.LMVis.Layer.LUTOverlayLayer import LUTOverlayLayer
 from PYME.LMVis.Layer.Point3DRenderLayer import Point3DRenderLayer
 from PYME.LMVis.Layer.PointSpriteRenderLayer import PointSpritesRenderLayer
+from PYME.LMVis.Layer.QuadTreeRenderLayer import QuadTreeRenderLayer
 from PYME.LMVis.Layer.RenderLayer import RenderLayer
 from PYME.LMVis.Layer.ScaleBarOverlayLayer import ScaleBarOverlayLayer
 from PYME.LMVis.Layer.SelectionOverlayLayer import SelectionOverlayLayer
 from PYME.LMVis.Layer.TriangleRenderLayer import TriangleRenderLayer
 from wx.glcanvas import GLCanvas
+
+from PYME.LMVis.View import View
 
 try:
     from PYME.Analysis.points.gen3DTriangs import gen3DTriangs, gen3DBlobs
@@ -444,6 +445,33 @@ class LMGLShaderCanvas(GLCanvas):
         """Set 2D points"""
         self.setPoints3D(x, y, 0 * x, c, a, recenter, alpha)
 
+    def setQuads(self, qt, max_depth=100, md_scale=False):
+        lvs = qt.getLeaves(max_depth)
+
+        xs = numpy.zeros((len(lvs), 4))
+        ys = numpy.zeros((len(lvs), 4))
+        c = numpy.zeros(len(lvs))
+
+        i = 0
+
+        real_max_depth = 0
+        for l in lvs:
+            xs[i, :] = [l.x0, l.x1, l.x1, l.x0]
+            ys[i, :] = [l.y0, l.y0, l.y1, l.y1]
+            c[i] = float(l.numRecords) * 2 ** (2 * l.depth)
+            i += 1
+            real_max_depth = max(real_max_depth, l.depth)
+
+        if not md_scale:
+            c /= 2 ** (2 * real_max_depth)
+
+        self.c = numpy.vstack((c, c, c, c)).T.ravel()
+
+        self.SetCurrent()
+        self.layers.append(QuadTreeRenderLayer(xs.ravel(), ys.ravel(), 0 * xs.ravel(),
+                                               self.c, self.cmap, self.clim, alpha=1))
+        self.Refresh()
+
     def ResetView(self):
 
         self.vecUp = numpy.array([0, 1, 0])
@@ -457,7 +485,8 @@ class LMGLShaderCanvas(GLCanvas):
 
     def setCMap(self, cmap):
         self.cmap = cmap
-        self.LUTOverlayLayer.set_color_map(cmap)
+        if self.LUTOverlayLayer:
+            self.LUTOverlayLayer.set_color_map(cmap)
         self.setColour()
 
     def setCLim(self, clim, alim=None):
@@ -730,24 +759,21 @@ class LMGLShaderCanvas(GLCanvas):
         else:
             event.Skip()
 
-    def getSnapshot(self, mode=GL_LUMINANCE):
-        snap = glReadPixelsf(0, 0, self.Size[0], self.Size[1], mode)
+    def getSnapshot(self):
+        # http://bazaar.launchpad.net/~mcfletch/openglcontext/trunk/view/head:/tests/saveimage.py
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0)
+        width, height = self.Size[0], self.Size[1]
+        snap = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, outputType=None)
 
-        # snap = snap.ravel().reshape(self.Size[0], self.Size[1], -1, order='F')
-
-        if mode == GL_LUMINANCE:
-            snap.strides = (4, 4 * snap.shape[0])
-        else:  # GL_RGB
-            snap.strides = (12, 12 * snap.shape[0], 4)
-
+        # img.show()
         return snap
 
     def getIm(self, pixelSize=None):
-        # FIXME - this is copied from 2D code and is currently broken.
         if pixelSize is None:  # use current pixel size
             self.OnDraw()
-            return self.getSnapshot(GL_RGB)
+            return self.getSnapshot()
         else:
+            # TODO Tiling function doesn't work properly
             # status = statusLog.StatusLogger('Tiling image ...')
             # save a copy of the viewport
             minx, maxx, miny, maxy = (self.xmin, self.xmax, self.ymin, self.ymax)
@@ -819,6 +845,25 @@ class LMGLShaderCanvas(GLCanvas):
         self.sz = 0  # z.max() - z.min()
 
         self.scale = 2. / (max(self.sx, self.sy))
+
+    def set_view(self, view):
+        self.vecBack = numpy.array(view._vec_back)
+        self.vecRight = numpy.array(view._vec_right)
+        self.vecUp = numpy.array(view._vec_up)
+        self.xc = view._translation[0]
+        self.yc = view._translation[1]
+        self.zc = view._translation[2]
+        self.scale = view._zoom
+        self.Refresh()
+
+    def get_view(self, view_id='id'):
+        view = View(view_id,
+                    self.vecUp.tolist(),
+                    self.vecBack.tolist(),
+                    self.vecRight.tolist(),
+                    [self.xc, self.yc, self.zc],
+                    self.scale)
+        return view
 
 
 def showGLFrame():

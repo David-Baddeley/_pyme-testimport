@@ -18,7 +18,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
+import csv
+
 import numpy
+
+from PYME.Acquire.Hardware.Simulator.wormlike2 import wormlikeChain
 
 
 class TestObject(object):
@@ -44,6 +48,27 @@ class TestObject(object):
         self._y += y
         self._z += z
 
+    def scale(self, x=1, y=1, z=1):
+        self._x *= x
+        self._y *= y
+        self._z *= z
+
+    def __add__(self, other):
+        new_x = numpy.append(other.x, self._x)
+        new_y = numpy.append(other.y, self._y)
+        new_z = numpy.append(other.z, self._z)
+        return TestObject(new_x, new_y, new_z)
+
+    def save(self, file_name):
+        with open(file_name, 'wb') as csv_file:
+            # fieldnames = ['x', 'z', 'z']
+            writer = csv.writer(csv_file)
+
+            # writer.writeheader()
+            collection = numpy.column_stack((self._x, self._y, self._z))
+            writer.writerow(('x', 'y', 'z'))
+            writer.writerows(collection)
+
 
 class NineCollections(TestObject):
 
@@ -62,3 +87,65 @@ class Cloud(TestObject):
         y = Cloud.DISTANCE * numpy.random.randn(amount_points)
         z = Cloud.DISTANCE * numpy.random.randn(amount_points)
         TestObject.__init__(self, x, y, z)
+
+
+class Ellipsoid(TestObject):
+
+    AXIS_A = 4
+    AXIS_B = 5
+    AXIS_C = 2
+
+    def __init__(self, amount_points,
+                 axis_a=AXIS_A,
+                 axis_b=AXIS_B,
+                 axis_c=AXIS_C):
+        max_axis = max(axis_a, axis_b, axis_c)
+        x = 5e3*numpy.random.randn(amount_points) * axis_a / max_axis
+        y = 5e3*numpy.random.randn(amount_points) * axis_b / max_axis
+        z = 5e3*numpy.random.randn(amount_points) * axis_c / max_axis
+        TestObject.__init__(self, x, y, z)
+
+
+class Worm(TestObject):
+    def __init__(self, kbp=200, step_length=50):
+        chain = wormlikeChain(kbp, steplength=step_length)
+        TestObject.__init__(self, chain.xp, chain.yp, chain.zp)
+
+
+class Ring(TestObject):
+
+    DIAMETER = 5e3
+    WIDTH = 1000
+
+    def __init__(self, amount_points, hole_size=0.4, hole_pos=0):
+        """
+
+        Parameters
+        ----------
+        amount_points
+        hole_size       in rad [0-2*pi]
+        hole_pos        in rad [0-2*pi]
+                        0 => y=0, x=1 => right
+        """
+        rad = numpy.random.rand(amount_points)*(2*numpy.pi-hole_size)+hole_size/2 + hole_pos
+        dist = self.DIAMETER - numpy.random.rand(amount_points) * self.WIDTH
+
+        x = dist * numpy.cos(rad)
+        y = dist * numpy.sin(rad)
+        z = numpy.ones(x.shape) * 0.1*numpy.random.randn(amount_points)
+
+        TestObject.__init__(self, x, y, z)
+
+
+class Clusterizer(TestObject):
+    def __init__(self, test_object, multiply, distance):
+        amount_of_points = len(test_object.x)
+        offsets_x = (numpy.random.randn(amount_of_points*multiply) - 0.5) * 2 * distance
+        offsets_y = (numpy.random.randn(amount_of_points*multiply) - 0.5) * 2 * distance
+        offsets_z = (numpy.random.randn(amount_of_points*multiply) - 0.5) * 2 * distance
+
+        new_positions_x = numpy.repeat(test_object.x, multiply) + offsets_x
+        new_positions_y = numpy.repeat(test_object.y, multiply) + offsets_y
+        new_positions_z = numpy.repeat(test_object.z, multiply) + offsets_z
+
+        TestObject.__init__(self, new_positions_x, new_positions_y, new_positions_z)

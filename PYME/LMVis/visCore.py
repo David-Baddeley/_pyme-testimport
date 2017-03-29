@@ -4,7 +4,6 @@ Created on Sat May 14 14:54:52 2016
 
 @author: david
 """
-
 import wx
 import wx.py.shell
 
@@ -86,7 +85,8 @@ class VisGUICore(object):
         else:
             self.glCanvas = LMGLShaderCanvas(win)
         win.AddPage(page=self.glCanvas, caption='View')#, select=True)
-        self.glCanvas.cmap = pylab.cm.gist_rainbow #pylab.cm.hot
+
+        self.glCanvas.setCMap(pylab.cm.gist_rainbow) #pylab.cm.hot
 
         #self.rec_gui = recipeGui.
         #win.AddPage(page=self.glCanvas, caption='View')#, select=True)
@@ -211,12 +211,13 @@ class VisGUICore(object):
             self.AddMenuItem('View', '&Pointsprites', self.OnViewPointsprites)
         self.AddMenuItem('View',  '&Triangles', self.OnViewTriangles)
         self.AddMenuItem('View', '3D Triangles', self.OnViewTriangles3D)
+        self.AddMenuItem('View', '&Quad Tree', self.OnViewQuads)
         if not use_shaders:
-            self.AddMenuItem('View', '&Quad Tree', self.OnViewQuads)
             self.AddMenuItem('View', '&Voronoi', self.OnViewVoronoi)
             self.AddMenuItem('View', '&Interpolated Triangles', self.OnViewInterpTriangles)
             self.AddMenuItem('View', '&Blobs', self.OnViewBlobs)
             self.AddMenuItem('View', '&Tracks', self.OnViewTracks)
+
 
         #self.view_menu.Check(ID_VIEW_POINTS, True)
         #self.view_menu.Enable(ID_VIEW_QUADS, False)
@@ -520,8 +521,11 @@ class VisGUICore(object):
             if not ret == wx.ID_OK:
                 dlg.Destroy()
                 return #we cancelled
-                
+
+
             args['FieldNames'] = dlg.GetFieldNames()
+            # remove trailing whitespace/line brake on last field name
+            args['FieldNames'][-1] = args['FieldNames'][-1].rstrip()
             args['SkipRows'] = dlg.GetNumberComments()
             args['PixelSize'] = dlg.GetPixelSize()
             

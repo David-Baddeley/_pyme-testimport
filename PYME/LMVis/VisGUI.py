@@ -35,17 +35,17 @@ import wx.py.shell
 import sys
 
 import matplotlib
+
+
+
 matplotlib.use('wxagg')
 import pylab
 
 from PYME.misc import extraCMaps
 from PYME.IO.FileUtils import nameUtils
 
-#import os
-#from PYME.LMVis import gl_render3D
 
 from PYME.LMVis import colourPanel
-#from PYME.LMVis import renderers
 from PYME.LMVis import pipeline
 
 import logging
@@ -78,7 +78,7 @@ class VisGUIFrame(AUIFrame, visCore.VisGUICore):
         self._flags = 0
         
         self.pipeline = pipeline.Pipeline(visFr=self)
-        
+
         #self.Quads = None
                
         #self.SetMenuBar(self.CreateMenuBar())
