@@ -27,6 +27,7 @@ from PYME import config
 from PYME.misc.computerName import GetComputerName
 compName = GetComputerName()
 import os
+import html
 
 #make sure we set up our logging before anyone elses does
 import logging
@@ -43,7 +44,7 @@ if dataserver_root:
     #logger = logging.getLogger('')
     logger = logging.getLogger('')
     logger.setLevel(logging.DEBUG)
-    fh = logging.handlers.RotatingFileHandler(filename=log_file, mode='w', maxBytes=1e6)
+    fh = logging.handlers.RotatingFileHandler(filename=log_file, mode='w', maxBytes=1e5)
     logger.addHandler(fh)
 else:
     logging.basicConfig(level=logging.DEBUG)
@@ -51,17 +52,28 @@ else:
     
 #now do all the normal imports
     
-import SimpleHTTPServer
-import BaseHTTPServer
-from SocketServer import ThreadingMixIn
+#import SimpleHTTPServer
+#import BaseHTTPServer
+# noinspection PyCompatibility
+import http.server
+# noinspection PyCompatibility
+from socketserver import ThreadingMixIn
 
-from StringIO import StringIO
+from io import StringIO, BytesIO
 import shutil
 #import urllib
 import sys
 import ujson as json
 import PYME.misc.pyme_zeroconf as pzc
-import urlparse
+
+try:
+    # noinspection PyCompatibility
+    import urlparse
+except ImportError:
+    #py3
+    # noinspection PyCompatibility
+    from urllib import parse as urlparse
+    
 import requests
 import socket
 import fcntl
@@ -81,6 +93,7 @@ compName = GetComputerName()
 procName = compName + ' - PID:%d' % os.getpid()
 
 LOG_REQUESTS = False#True
+USE_DIR_CACHE = True
 
 startTime = datetime.datetime.now()
 #global_status = {}
@@ -158,7 +171,9 @@ _dirCacheTimeout = 1
 
 _listDirLock = threading.Lock()
 
-class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+from PYME.IO import clusterListing as cl
+
+class PYMEHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
     bandwidthTesting = False
     logrequests = False
@@ -189,6 +204,9 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             with open(path, 'ab') as f:
                 f.write(data)
 
+        if USE_DIR_CACHE:
+            cl.dir_cache.update_cache(path, int(self.headers['Content-Length']))
+
         self.send_response(200)
         self.send_header("Content-Length", "0")
         self.end_headers()
@@ -204,8 +222,8 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         No table name: assumes we have a fitResults object (as returned by remFitBuf and saves to the the appropriate tables (as HDF task queue would)
         """
         import numpy as np
-        import cStringIO
-        import cPickle
+        from io import BytesIO
+        from six.moves import cPickle
         from PYME.IO import MetaDataHandler
         from PYME.IO import h5rFile
 
@@ -236,7 +254,7 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 except cPickle.UnpicklingError:
                     try:
                         #try to read data as if it was numpy binary formatted
-                        data = np.load(cStringIO.StringIO(data))
+                        data = np.load(BytesIO(data))
                     except IOError:
                         #it's not numpy formatted - try json
                         import pandas as pd
@@ -248,6 +266,8 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 #logging.debug('added data to table')
 
         #logging.debug('left h5r file')
+        if USE_DIR_CACHE:
+            cl.dir_cache.update_cache(filename, int(self.headers['Content-Length']))
 
         self.send_response(200)
         self.send_header("Content-Length", "0")
@@ -314,6 +334,8 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 with open(path, 'wb') as f:
                     #shutil.copyfileobj(self.rfile, f, int(self.headers['Content-Length']))
                     f.write(self.rfile.read(int(self.headers['Content-Length'])))
+                    if USE_DIR_CACHE:
+                        cl.dir_cache.update_cache(path, int(self.headers['Content-Length']))
 
             self.send_response(200)
             self.send_header("Content-Length", "0")
@@ -332,7 +354,7 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     def get_status(self):
 
 
-        f = StringIO()
+        f = BytesIO()
         f.write(json.dumps(status))
         length = f.tell()
         f.seek(0)
@@ -413,10 +435,17 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             curTime = time.time()
             try:
                 js_dir, expiry = _dirCache[path]
-                if expiry < curTime: raise RuntimeError('Expired')
+                if expiry < curTime:
+                    raise RuntimeError('Expired')
+                
+                #logger.debug('jsoned dir cache hit')
             except (KeyError, RuntimeError):
+                #logger.debug('jsoned dir cache miss')
                 try:
-                    l2 = cl.list_directory(path)
+                    if USE_DIR_CACHE:
+                        l2 = cl.dir_cache.list_directory(path)
+                    else:
+                        l2 = cl.list_directory(path)
                 except os.error:
                     self.send_error(404, "No permission to list directory")
                     return None
@@ -424,7 +453,7 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 js_dir = json.dumps(l2)
                 _dirCache[path] = (js_dir, time.time() + _dirCacheTimeout)
 
-        f = StringIO()
+        f = BytesIO()
         f.write(js_dir)
         length = f.tell()
         f.seek(0)
@@ -522,7 +551,7 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             # (see bug #1100201)
             content = (self.error_message_format % {
                 'code': code,
-                'message': BaseHTTPServer._quote_html(message),
+                'message': html.escape(message),
                 'explain': explain
             })
             self.send_header("Content-Type", self.error_content_type)
@@ -534,7 +563,7 @@ class PYMEHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.wfile.write(content)
 
 
-class ThreadedHTTPServer(ThreadingMixIn, BaseHTTPServer.HTTPServer):
+class ThreadedHTTPServer(ThreadingMixIn, http.server.HTTPServer):
     """Handle requests in a separate thread."""
 
 
@@ -558,6 +587,8 @@ def main(protocol="HTTP/1.0"):
     default_root = config.get('dataserver-root', os.curdir)
     op.add_option('-r', '--root', dest='root', help="Root directory of virtual filesystem (default %s, see also 'dataserver-root' config entry)" % dataserver_root, default=default_root)
     op.add_option('-k', '--profile', dest='profile', help="Enable profiling", default=False, action="store_true")
+    default_server_filter = config.get('dataserver-filter', '')
+    op.add_option('-f', '--server-filter', dest='server_filter', help='Add a serverfilter for distinguishing between different clusters', default=default_server_filter)
 
 
     options, args = op.parse_args()
@@ -586,7 +617,7 @@ def main(protocol="HTTP/1.0"):
     ip_addr = socket.gethostbyname(socket.gethostname())
 
     ns = pzc.getNS('_pyme-http')
-    ns.register_service('PYMEDataServer: ' + procName, ip_addr, sa[1])
+    ns.register_service('PYMEDataServer [%s]: ' % options.server_filter + procName, ip_addr, sa[1])
 
     status['IPAddress'] = ip_addr
     status['BindAddress'] = server_address
@@ -605,7 +636,7 @@ def main(protocol="HTTP/1.0"):
     sp.start()
 
 
-    print "Serving HTTP on", ip_addr, "port", sa[1], "..."
+    print ("Serving HTTP on %s port %d ..." % (ip_addr, sa[1]))
     try:
         httpd.serve_forever()
     finally:

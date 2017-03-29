@@ -70,6 +70,7 @@ class DensityMapping(ModuleBase):
     MCProbability = Float(1.0)
     numSamples = Int(10)
     colours = List(['none'])
+    zBoundsMode = Enum(['manual', 'min-max'])
     zBounds = ListFloat([-500, 500])
     zSliceThickness = Float(50.0)
     softRender = Bool(True)
@@ -84,6 +85,8 @@ class DensityMapping(ModuleBase):
             cf = inp
 
         cf.imageBounds = ImageBounds.estimateFromSource(inp)
+        if self.zBoundsMode == 'min-max':
+            self.zBounds[0], self.zBounds[1] = float(cf.imageBounds.z0), float(cf.imageBounds.z1)
 
         renderer = renderers.RENDERERS[str(self.renderingModule)](None, cf)
 
@@ -203,9 +206,9 @@ class FindClumps(ModuleBase):
     """Create a new mapping object which derives mapped keys from original ones"""
     inputName = Input('registered')
     gapTolerance = Int(1, desc='Number of off-frames allowed to still be a single clump')
-    radiusScale = Float(2.0)
-    radius_offset_nm = Float(150., desc='[nm]')
-    probeAwareClumping = Bool(False, desc='''Use probe-aware clumping. NB this option does not work with standard methods of colour 
+    radiusScale = Float(2.0, desc='Factor by which error_x is multiplied to detect clumps. The default of 2-sigma means we link ~95% of the points which should be linked')
+    radius_offset = Float(0., desc='Extra offset (in nm) for cases where we want to link despite poor channel alignment')
+    probeAware = Bool(False, desc='''Use probe-aware clumping. NB this option does not work with standard methods of colour
                                              specification, and splitting by channel and clumping separately is preferred''') 
     outputName = Output('clumped')
 
@@ -214,10 +217,10 @@ class FindClumps(ModuleBase):
 
         inp = namespace[self.inputName]
 
-        if self.probeAwareClumping and 'probe' in inp.keys(): #special case for using probe aware clumping NB this is a temporary fudge for non-standard colour handling
-            mapped = multiview.probeAwareFindClumps(inp, self.gapTolerance, self.radiusScale, self.radius_offset_nm)
+        if self.probeAware and 'probe' in inp.keys(): #special case for using probe aware clumping NB this is a temporary fudge for non-standard colour handling
+            mapped = multiview.probeAwareFindClumps(inp, self.gapTolerance, self.radiusScale, self.radius_offset)
         else: #default
-            mapped = multiview.findClumps(inp, self.gapTolerance, self.radiusScale, self.radius_offset_nm)
+            mapped = multiview.findClumps(inp, self.gapTolerance, self.radiusScale, self.radius_offset)
         
         if 'mdh' in dir(inp):
             mapped.mdh = inp.mdh
@@ -237,14 +240,11 @@ class MergeClumps(ModuleBase):
 
         inp = namespace[self.inputName]
 
-        #mapped = tabular.mappingFilter(inp)
-
-        if 'mdh' not in dir(inp):
-            raise RuntimeError('MergeClumps needs metadata')
-
-        grouped = multiview.mergeClumps(inp, inp.mdh.getOrDefault('Multiview.NumROIs', 0), labelKey=self.labelKey)
-
-        grouped.mdh = inp.mdh
+        try:
+            grouped = multiview.mergeClumps(inp, inp.mdh.getOrDefault('Multiview.NumROIs', 0), labelKey=self.labelKey)
+            grouped.mdh = inp.mdh
+        except AttributeError:
+            grouped = multiview.mergeClumps(inp, numChan=0, labelKey=self.labelKey)
 
         namespace[self.outputName] = grouped
 
@@ -368,9 +368,12 @@ class DBSCANClustering(ModuleBase):
     def hide_in_overview(self):
         return ['columns']
 
+#TODO - this is very specialized and probably doesn't belong here - at least not in this form
 @register_module('ClusterCountVsImagingTime')
 class ClusterCountVsImagingTime(ModuleBase):
     """
+    WARNING: This module will likely move, dissapear, or be refactored
+
     ClusterCountVsImagingTime iteratively filters a dictionary-like object on t, and at each step counts the number of
     labeled objects (e.g. DBSCAN clusters) which contain at least N-points. It does this for two N-points, so one can be
     set according to density with all frames included, and the other can be set for one of the earlier frame-counts.
@@ -448,11 +451,137 @@ class ClusterCountVsImagingTime(ModuleBase):
         namespace[self.outputName] = res
 
 
-class Dict(dict):
+@register_module('LabelsFromImage')
+class LabelsFromImage(ModuleBase):
     """
-    This dummy class just enables a dictionary which can also have attributes (something the dict class cannot).
+    Maps each point in the input table to a pixel in a labelled image, and extracts the pixel value at that location to
+    use as a label for the point data. 
+
+    Inputs
+    ------
+    inputName: name of tabular input containing positions ('x', 'y', and optionally 'z' columns should be present)
+    inputImage: name of image input containing labels
+
+    Outputs
+    -------
+    outputName: name of tabular output. A mapped version of the tabular input with 2 extra columns
+        objectID: Label number from image, mapped to each localization within that label
+        NEvents: Number of localizations within the label that a given localization belongs to
+
     """
-    pass
+    inputName = Input('input')
+    inputImage = Input('labeled')
+
+    outputName = Output('labeled_points')
+
+    def execute(self, namespace):
+        from PYME.IO import tabular
+        from PYME.Analysis.points import cluster_morphology
+
+        inp = namespace[self.inputName]
+        img = namespace[self.inputImage]
+        #img = image.openImages[dlg.GetStringSelection()]
+
+        ids, numPerObject = cluster_morphology.get_labels_from_image(img, inp)
+
+        labeled = tabular.mappingFilter(inp)
+        labeled.addColumn('objectID', ids)
+        labeled.addColumn('NEvents', numPerObject[ids - 1])
+
+        # propagate metadata, if present
+        try:
+            labeled.mdh = namespace[self.inputName].mdh
+        except AttributeError:
+            pass
+
+        namespace[self.outputName] = labeled
+
+
+@register_module('MeasureClusters3D')
+class MeasureClusters3D(ModuleBase):
+    """
+    Measures the 3D morphology of clusters of points
+
+    Inputs
+    ------
+
+    inputName : name of tabular data containing x, y, and z columns and labels identifying which cluster each point
+                belongs to.
+
+    Outputs
+    -------
+
+    outputName: a new tabular data source containing measurements of the clusters
+    
+    Parameters
+    ----------
+        labelKey: name of column to use as a label identifying clusters
+
+    Notes
+    -----
+
+    Measures calculated (to be expanded)
+    --------------------------------------
+        count: the number of points in the cluster
+        x, y, z: Center of mass positions, no weighting based on localization precision
+        gyrationRadius: AKA RMS distance to center of cluster - see also supplemental text of DOI: 10.1038/nature16496
+        axis0, axis1, axis2: principle axes of point cloud using SVD
+        sigma0, sigma1, sigma2: spread along each principle axis (the singular values/ sqrt(N-1))
+
+    """
+    inputName = Input('input')
+    labelKey = CStr('clumpIndex')
+
+    outputName = Output('clusterMeasures')
+
+    def execute(self, namespace):
+        from PYME.Analysis.points import cluster_morphology as cmorph
+        import numpy as np
+
+        inp = namespace[self.inputName]
+
+        # make sure labeling scheme is consistent with what pyme conventions
+        if np.min(inp[self.labelKey]) < 0:
+            raise UserWarning('This module expects 0-label for unclustered points, and no negative labels')
+
+        labels = inp[self.labelKey]
+        I = np.argsort(labels)
+        I = I[labels[I] > 0]
+        
+        x_vals, y_vals, z_vals = inp['x'][I], inp['y'][I], inp['z'][I]
+        labels = labels[I]
+        maxLabel = labels[-1]
+        
+        #find the unique labels, and their separation in the sorted list of points
+        unique_labels, counts = np.unique(labels, return_counts=True)
+        
+        #allocate memory to store results in
+        measurements = np.zeros(maxLabel+1, cmorph.measurement_dtype)
+
+        # loop over labels, recalling that input is now sorted, and we know how many points are in each label.
+        # Note that missing labels result in zeroed entries (i.e. the initial values are not changed).
+        # Missing values can be filtered out later, if desired, by filtering on the 'counts' column, but having a dense
+        # array where index == label number makes any postprocessing in which we might want to find the data
+        # corresponding to a particular label MUCH easier and faster.
+        indi = 0
+        for label_num, ct in zip(unique_labels, counts):
+            indf = indi + ct
+
+            # create x,y,z arrays for this cluster, and calculate center of mass
+            x, y, z = x_vals[indi:indf], y_vals[indi:indf], z_vals[indi:indf]
+            
+            cmorph.measure_3d(x, y, z, output=measurements[label_num])
+
+            indi = indf
+
+        meas = tabular.recArrayInput(measurements)
+
+        try:
+            meas.mdh = namespace[self.inputName].mdh
+        except AttributeError:
+            pass
+
+        namespace[self.outputName] = meas
 
 @register_module('FitToSphericalHarmonics')
 class FitToSphericalHarmonics(ModuleBase): #FIXME - this likely doesnt belong here
@@ -479,6 +608,7 @@ class FitToSphericalHarmonics(ModuleBase): #FIXME - this likely doesnt belong he
 
         modes, coeffs, centre = spharm.sphere_expansion_clean(inp['x'], inp['y'], self.zscale*inp['z'], mmax=self.max_m_mode)
 
+        # FIXME - use recarray as output
         recon = Dict({'modes': modes, 'coeffs': coeffs, 'centre': centre, 'zscale': self.zscale,
                            'max_m_mode': self.max_m_mode})
 
@@ -489,6 +619,7 @@ class FitToSphericalHarmonics(ModuleBase): #FIXME - this likely doesnt belong he
 
         namespace[self.outputName] = recon
 
+# FIXME - too fine-grained, instead add normalized_radius column, which can then be filtered on separately
 @register_module('IDPointsInsideSphereicalHarmonicStructure')
 class IDPointsInsideSphereicalHarmonicStructure(ModuleBase): #FIXME - this likely doesnt belong here
     """Parameters
