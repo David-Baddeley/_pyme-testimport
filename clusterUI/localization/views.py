@@ -124,8 +124,10 @@ def _launch_localize(analysisMDH, seriesName):
     resultsFilename = _verifyClusterResultsFilename(genClusterResultFileName(seriesName))
     logging.debug('Results file: ' + resultsFilename)
 
-    resultsMdh = MetaDataHandler.NestedClassMDHandler(analysisMDH)
+    resultsMdh = MetaDataHandler.NestedClassMDHandler()#analysisMDH)
+    # NB - anything passed in analysis MDH will whipe out corresponding entries in the series metadata
     resultsMdh.update(json.loads(unifiedIO.read(seriesName + '/metadata.json')))
+    resultsMdh.update(analysisMDH)
 
     resultsMdh['EstimatedLaserOnFrameNo'] = resultsMdh.getOrDefault('EstimatedLaserOnFrameNo', resultsMdh.getOrDefault('Analysis.StartAt', 0))
     MetaData.fixEMGain(resultsMdh)
@@ -153,7 +155,8 @@ def localize(request, analysisModule='LatGaussFitFR'):
     f.cleaned_data['Analysis.FitModule'] = analysisModule
 
     #print json.dumps(f.cleaned_data)
-    analysisMDH = MetaDataHandler.NestedClassMDHandler(MetaData.TIRFDefault)
+    # NB - any metadata entries given here will override the series metadata later: pass analysis settings only
+    analysisMDH = MetaDataHandler.NestedClassMDHandler()
     analysisMDH.update(f.cleaned_data)
 
     #print request.GET
