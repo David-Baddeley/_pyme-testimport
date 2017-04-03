@@ -583,3 +583,34 @@ class MeasureClusters3D(ModuleBase):
 
         namespace[self.outputName] = meas
 
+@register_module('FitToSphericalHarmonics')
+class FitToSphericalHarmonics(ModuleBase): #FIXME - this likely doesnt belong here
+    """Parameters
+    ----------
+
+        max_m_mode: Maximum order to calculate to.
+        zscale: Factor to scale z by when projecting onto spherical harmonics. It is helpful to scale z such that the
+            x, y, and z extents are roughly equal.
+
+    Notes
+    -----
+    Sometimes it's ok to be square - orthogonality has its perks.
+    """
+    inputName = Input('zmapped')
+    max_m_mode = Int(5)
+    zscale = Float(5.0)
+    outputName = Output('spharmonicprojection')
+
+    def execute(self, namespace):
+        import PYME.Analysis.points.spherical_harmonics as spharm
+
+        inp = namespace[self.inputName]
+
+        proj = tabular.recArrayInput(spharm.project(inp['x'], inp['y'], inp['z'], mmax=self.max_m_mode, z_scale=self.zscale))
+
+        try:
+            proj.mdh = namespace[self.inputName].mdh
+        except AttributeError:
+            pass
+
+        namespace[self.outputName] = proj
