@@ -35,17 +35,17 @@ import wx.py.shell
 import sys
 
 import matplotlib
+
+
+
 matplotlib.use('wxagg')
 import pylab
 
 from PYME.misc import extraCMaps
 from PYME.IO.FileUtils import nameUtils
 
-#import os
-#from PYME.LMVis import gl_render3D
 
 from PYME.LMVis import colourPanel
-#from PYME.LMVis import renderers
 from PYME.LMVis import pipeline
 
 import logging
@@ -78,7 +78,7 @@ class VisGUIFrame(AUIFrame, visCore.VisGUICore):
         self._flags = 0
         
         self.pipeline = pipeline.Pipeline(visFr=self)
-        
+
         #self.Quads = None
                
         #self.SetMenuBar(self.CreateMenuBar())
@@ -383,10 +383,10 @@ def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('file', help="file that should be used", default=None, nargs='?')
     parser.add_argument('-r', '--recipe', help='recipe to use for variable portion of pipeline', dest='recipe', default=None)
-    parser.add_argument('-s', '--use_shaders', dest="use_shaders", action='store_true', default=False,
+    parser.add_argument('-s', '--use_shaders', dest="use_shaders", action='store_true', default=True,
                         help='switch shaders on(default: off)')
     parser.add_argument('--no_use_shaders', dest="use_shaders", action='store_false',
-                        default=False, help='switch shaders off(default: off)')
+                        default=True, help='switch shaders off(default: off)')
     args = parser.parse_args()
     return args
     
