@@ -79,7 +79,7 @@ class RecipePlotPanel(wxPlotPanel.PlotPanel):
         
         fontSize = max(6, min(10, 10*pix_per_col/100.))
         
-        print pix_per_col, fontSize
+        #print pix_per_col, fontSize
         
         TW = textwrap.TextWrapper(width=int(1.8*pix_per_col/fontSize), subsequent_indent='  ')
         TW2 = textwrap.TextWrapper(width=int(1.3*pix_per_col/fontSize), subsequent_indent='  ')
@@ -544,7 +544,7 @@ class BatchFrame(wx.Frame, wx.FileDropTarget):
     def OnGetMatches(self, event=None):
         import glob
         
-        files = glob.glob(self.tGlob.GetValue())
+        files = sorted(glob.glob(self.tGlob.GetValue()))
         self.UpdateFileList(files)
         
     def UpdateFileList2(self, filenames):
@@ -558,7 +558,7 @@ class BatchFrame(wx.Frame, wx.FileDropTarget):
     def OnGetMatches2(self, event=None):
         import glob
         
-        files = glob.glob(self.tGlob2.GetValue())
+        files = sorted(glob.glob(self.tGlob2.GetValue()))
         self.UpdateFileList2(files)
         
     def OnBake(self, event=None):

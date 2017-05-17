@@ -105,22 +105,6 @@ class LocalMaxima(Filter):
         im.mdh['LocalMaxima.threshold'] = self.threshold
         im.mdh['LocalMaxima.minDistance'] = self.minDistance
         
-@register_module('SVMSegment')         
-class svmSegment(Filter):
-    classifier = File('')
-    
-    def _loadClassifier(self):
-        from PYME.Analysis import svmSegment
-        if not '_cf' in dir(self):
-            self._cf = svmSegment.svmClassifier(filename=self.classifier)
-    
-    def applyFilter(self, data, chanNum, frNum, im):
-        self._loadClassifier()
-        
-        return self._cf.classify(data.astype('f'))
-
-    def completeMetadata(self, im):
-        im.mdh['SVMSegment.classifier'] = self.classifier
         
 @register_module('OpticalFlow')         
 class OpticalFlow(ModuleBase):
@@ -513,14 +497,15 @@ class Deconvolve(Filter):
 
     
     def GetPSF(self, vshint):
+        from PYME.IO.load_psf import load_psf
         psfKey = (self.psfType, self.psfFilename, self.lorentzianFWHM, self.gaussianFWHM, self.beadDiameter, vshint)
         
         if not psfKey in self._psfCache.keys():
             if self.psfType == 'file':
-                psf, vs = np.load(self.psfFilename)
+                psf, vs = load_psf(self.psfFilename)
                 psf = np.atleast_3d(psf)
                 
-                vsa = 1e3*np.array([vs.x, vs.y, vs.z]) 
+                vsa = np.array([vs.x, vs.y, vs.z])
                 
                 if not np.allclose(vshint, vsa, rtol=.03):
                     psf = ndimage.zoom(psf, vshint/vsa)

@@ -25,6 +25,8 @@
 import glob
 import os
 
+from imp import reload
+
 from PYME import config
 
 localmodules = [os.path.splitext(os.path.split(p)[-1])[0] for p in glob.glob(__path__[0] + '/[a-zA-Z]*.py')]
@@ -53,7 +55,7 @@ modeModules = {
 'LM' : ['arrayView'] + liteModules + basemodules +  ['LMAnalysis'],
 'blob' : ['arrayView'] + liteModules + basemodules + ['blobFinding', 'psfExtraction'],
 'default' : ['arrayView'] + liteModules + basemodules,
-'psf'   :   ['arrayView'] + liteModules + ['deconvolution', 'psfTools'],
+'psf'   :   ['arrayView'] + liteModules + ['deconvolution', 'psfTools', 'metadataView'],
 'visGUI' : ['visgui'] + liteModules + ['coloc', 'vis3D'],
 'graph' : ['graphViewPanel', 'profileFitting'],
 'fgraph' : ['fastGraphPanel'],

@@ -30,6 +30,7 @@
 #except:
 #    pass
 
+from __future__ import print_function
 import os
 import numpy
 
@@ -43,6 +44,7 @@ from PYME.IO.DataSources import BufferedDataSource
 
 from PYME.IO.FileUtils.nameUtils import getRelFilename
 from collections import namedtuple
+from six import string_types
 
 VS = namedtuple('VS', 'x,y,z')
 
@@ -57,13 +59,20 @@ class ImageBounds:
 
     @classmethod
     def estimateFromSource(cls, ds):
-        return cls(ds['x'].min(),ds['y'].min(),ds['x'].max(), ds['y'].max() )
+        if 'z' in ds.keys():
+            return cls(ds['x'].min(), ds['y'].min(), ds['x'].max(), ds['y'].max(), ds['z'].min(), ds['z'].max())
+        else:
+            return cls(ds['x'].min(),ds['y'].min(),ds['x'].max(), ds['y'].max())
 
     def width(self):
         return self.x1 - self.x0
 
     def height(self):
         return self.y1 - self.y0
+    
+    @property
+    def bounds(self):
+        return self.x0, self.y0, self.x1, self.y1, self.z0, self.z1
 
     @classmethod
     def extractFromMetadata(cls, mdh):
@@ -203,7 +212,7 @@ class ImageStack(object):
         self.volatile = False #is the data likely to change and need refreshing?
         
         #support for specifying metadata as filename
-        if isinstance(mdh, str) or isinstance(mdh,unicode):#os.path.exists(mdh):
+        if isinstance(mdh, string_types):#os.path.exists(mdh):
             self.mdh = None
             self._findAndParseMetadata(mdh)
         
@@ -437,7 +446,7 @@ class ImageStack(object):
         cand = os.path.sep.join(fns[:-2] + ['analysis',] + fns[-2:]) + 'r'
         print(cand)
         if False:#os.path.exists(cand):
-            h5Results = tables.openFile(cand)
+            h5Results = tables.open_file(cand)
 
             if 'FitResults' in dir(h5Results.root):
                 self.fitResults = h5Results.root.FitResults[:]
@@ -523,6 +532,24 @@ class ImageStack(object):
         self.seriesName = getRelFilename(filename)
 
         self.mode = 'psf'
+        
+    def _loadSF(self, filename):
+        self.mdh =MetaDataHandler.NestedClassMDHandler( MetaData.BareBones)
+        self.mdh.setEntry('chroma.ShiftFilename', filename)
+        dx, dy = numpy.load(filename)
+        self.mdh.setEntry('chroma.dx', dx)
+        self.mdh.setEntry('chroma.dy', dy)
+        
+        #Completely guessing dimensions as it it not logged in the file
+        x = numpy.linspace(0, 256*70, 256)
+        y = numpy.linspace(0, 512*70, 512)
+        xs, ys = numpy.meshgrid(x, y)
+        self.data = [dx.ev(xs.ravel(), ys.ravel()).reshape(xs.shape)[::-1,:].T, dy.ev(xs.ravel(), ys.ravel()).reshape(xs.shape)[::-1,:].T]
+        
+        from PYME.Analysis.points import twoColourPlot
+        twoColourPlot.PlotShiftField2(dx, dy, [256, 512])
+
+        self.mode = 'default'
         
     def _loadNPY(self, filename):
         """Load numpy .npy data.
@@ -731,11 +758,11 @@ class ImageStack(object):
         mdfn = self._findAndParseMetadata(filename)
 
         self.dataSource = TiffDataSource.DataSource(filename, None)
-        print self.dataSource.shape
+        print(self.dataSource.shape)
         self.dataSource = BufferedDataSource.DataSource(self.dataSource, min(self.dataSource.getNumSlices(), 50))
         self.data = self.dataSource #this will get replaced with a wrapped version
-        
-        print self.data.shape
+
+        print(self.data.shape)
 
 
         #if we have a multi channel data set, try and pull in all the channels
@@ -784,29 +811,32 @@ class ImageStack(object):
 
         self.mode = 'default'
         
+        if self.mdh.getOrDefault('ImageType', '') == 'PSF':
+            self.mode = 'psf'
+        
     def _loadBioformats(self, filename):
         #from PYME.IO.FileUtils import readTiff
         from PYME.IO.DataSources import BioformatsDataSource
         import bioformats
 
         #mdfn = self.FindAndParseMetadata(filename)
-        print "Bioformats:loading data"
+        print("Bioformats:loading data")
         self.dataSource = BioformatsDataSource.DataSource(filename, None)
         self.mdh = MetaDataHandler.NestedClassMDHandler(MetaData.BareBones)
         
-        print "Bioformats:loading metadata"
+        print("Bioformats:loading metadata")
         OMEXML = bioformats.get_omexml_metadata(filename).encode('utf8')
-        print "Bioformats:parsing metadata"
+        print("Bioformats:parsing metadata")
         OMEmd = MetaDataHandler.OMEXMLMDHandler(OMEXML)
         self.mdh.copyEntriesFrom(OMEmd)
-        print "Bioformats:done"
+        print("Bioformats:done")
                 
         
-        print self.dataSource.shape
+        print(self.dataSource.shape)
         self.dataSource = BufferedDataSource.DataSource(self.dataSource, min(self.dataSource.getNumSlices(), 50))
         self.data = self.dataSource #this will get replaced with a wrapped version
         
-        print self.data.shape
+        print(self.data.shape)
 
         #from PYME.ParallelTasks.relativeFiles import getRelFilename
         self.seriesName = getRelFilename(filename)
@@ -914,6 +944,8 @@ class ImageStack(object):
             #    self.LoadKdf(filename)
             elif filename.endswith('.psf'): #psf
                 self._loadPSF(filename)
+            elif filename.endswith('.sf'): #shift field
+                self._loadSF(filename)
             elif filename.endswith('.md'): #treat this as being an image series
                 self._loadImageSeries(filename)
             elif filename.endswith('.npy'): #treat this as being an image series
