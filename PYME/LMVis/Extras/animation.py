@@ -25,11 +25,12 @@ from time import sleep
 import wx
 import wx.lib.agw.aui as aui
 
+from PYME.LMVis.Extras.dockedPanel import DockedPanel
 from PYME.LMVis.views import VideoView
 
 
 # noinspection PyUnusedLocal
-class VideoPanel(wx.Panel):
+class VideoPanel(DockedPanel):
     JSON_LIST_NAME = 'views'
 
     def __init__(self, parent_panel, **kwargs):
@@ -49,9 +50,6 @@ class VideoPanel(wx.Panel):
         self.create_buttons(vertical_sizer)
 
         self.SetSizerAndFit(vertical_sizer)
-
-    def get_canvas(self):
-        return self.parent_panel.glCanvas
 
     def create_buttons(self, vertical_sizer):
         grid_sizer = wx.GridSizer(3, 3)
@@ -305,10 +303,5 @@ class VideoFrame(wx.Frame):
         self.SetSizer(hsizer)
         hsizer.Fit(self)
 
-def Plug(visFr):
-    video_panel = VideoPanel(visFr)
-    video_panel.SetSize(video_panel.GetBestSize())
-    pinfo = aui.AuiPaneInfo().Name("video_panel").Right().Caption('Animation').CloseButton(False).MinimizeButton(
-        True).Dock().MinimizeMode(aui.AUI_MINIMIZE_CAPT_SMART | aui.AUI_MINIMIZE_POS_RIGHT)
-    visFr._mgr.AddPane(video_panel, pinfo)
-    visFr._mgr.MinimizePane(pinfo)
+def Plug(vis_fr):
+    DockedPanel.add_menu_item(vis_fr, 'Animation', VideoPanel, 'animation_panel')

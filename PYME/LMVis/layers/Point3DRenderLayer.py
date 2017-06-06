@@ -18,16 +18,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-from PYME.LMVis.layers.RenderLayer import RenderLayer
+from PYME.LMVis.layers.VertexRenderLayer import VertexRenderLayer
 from OpenGL.GL import *
 
 from PYME.LMVis.shader_programs.DefaultShaderProgram import DefaultShaderProgram
 
 
-class Point3DRenderLayer(RenderLayer):
+class Point3DRenderLayer(VertexRenderLayer):
 
-    def __init__(self,  x, y, z, colors, color_map, color_limit, alpha, point_size=5):
-        RenderLayer.__init__(self, x, y, z, colors, color_map, color_limit, alpha)
+    def __init__(self,  x=None, y=None, z=None, colors=None, color_map=None, color_limit=None, alpha=1.0, point_size=5):
+        VertexRenderLayer.__init__(self, x, y, z, colors, color_map, color_limit, alpha)
         self._point_size = point_size
         self.set_shader_program(DefaultShaderProgram)
 

@@ -30,7 +30,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 from PYME.LMVis.layers import AxesOverlayLayer, LUTOverlayLayer, Point3DRenderLayer, PointSpritesRenderLayer, \
-    QuadTreeRenderLayer, RenderLayer, ScaleBarOverlayLayer, SelectionOverlayLayer, ShadedPointRenderLayer, \
+    QuadTreeRenderLayer, VertexRenderLayer, ScaleBarOverlayLayer, SelectionOverlayLayer, ShadedPointRenderLayer, \
     TriangleRenderLayer
 
 from PYME.LMVis.gl_offScreenHandler import OffScreenHandler
@@ -178,7 +178,6 @@ class LMGLShaderCanvas(GLCanvas):
             print('ns')
             return
         wx.PaintDC(self)
-        # print self.GetContext()
         self.gl_context.SetCurrent(self)
         self.SetCurrent()
 
@@ -403,8 +402,8 @@ class LMGLShaderCanvas(GLCanvas):
         self.SetCurrent()
 
         self.layers.append(
-            RenderLayer(T.x[T.triangle_nodes], T.y[T.triangle_nodes], 0 * (T.x[T.triangle_nodes]), self.c,
-                        self.cmap, self.clim, alpha))
+            VertexRenderLayer(T.x[T.triangle_nodes], T.y[T.triangle_nodes], 0 * (T.x[T.triangle_nodes]), self.c,
+                              self.cmap, self.clim, alpha))
         self.Refresh()
 
     def setTriangEdges(self, T):
@@ -680,19 +679,19 @@ class LMGLShaderCanvas(GLCanvas):
             angx = numpy.pi * (x - self.xDragStart) / 180
             angy = -numpy.pi * (y - self.yDragStart) / 180
 
-            rMat1 = numpy.matrix(
+            r_mat1 = numpy.matrix(
                 [[numpy.cos(angx), 0, numpy.sin(angx)], [0, 1, 0], [-numpy.sin(angx), 0, numpy.cos(angx)]])
-            rMat = rMat1 * numpy.matrix(
+            r_mat = r_mat1 * numpy.matrix(
                 [[1, 0, 0], [0, numpy.cos(angy), numpy.sin(angy)], [0, -numpy.sin(angy), numpy.cos(angy)]])
 
-            vecRightN = numpy.array(rMat * numpy.matrix(self.vecRight).T).squeeze()
-            vecUpN = numpy.array(rMat * numpy.matrix(self.vecUp).T).squeeze()
-            vecBackN = numpy.array(rMat * numpy.matrix(self.vecBack).T).squeeze()
+            vec_right_n = numpy.array(r_mat * numpy.matrix(self.vecRight).T).squeeze()
+            vec_up_n = numpy.array(r_mat * numpy.matrix(self.vecUp).T).squeeze()
+            vec_back_n = numpy.array(r_mat * numpy.matrix(self.vecBack).T).squeeze()
 
-            self.vecRight = vecRightN
+            self.vecRight = vec_right_n
 
-            self.vecUp = vecUpN
-            self.vecBack = vecBackN
+            self.vecUp = vec_up_n
+            self.vecBack = vec_back_n
 
             self.xDragStart = x
             self.yDragStart = y

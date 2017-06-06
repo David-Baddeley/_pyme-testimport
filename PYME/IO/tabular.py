@@ -642,6 +642,17 @@ class mappingFilter(TabularBase):
 
         return eval(map)
 
+class _ChannelFilter(TabularBase):
+    def __init__(self, colour_filter, channel):
+        self.colour_filter = colour_filter
+        self.channel = channel
+        
+    def __getitem__(self, keys):
+        return self.colour_filter.get_channel_column(self.channel, keys)
+    
+    def keys(self):
+        return self.colour_filter.keys()
+
 class colourFilter(TabularBase):
     _name = "Colour Filter"
     def __init__(self, resultsSource, currentColour=None):
@@ -658,19 +669,21 @@ class colourFilter(TabularBase):
 
     @property
     def index(self):
+        return self._index(self.currentColour)
+        
+    def _index(self, channel):
         colChans = self.getColourChans()
-
-        if not self.currentColour in colChans:
+        if not channel in colChans:
             return np.ones(len(self.resultsSource[self.resultsSource.keys()[0]]), 'bool')
         else:
-            p_dye = self.resultsSource['p_%s' % self.currentColour]
+            p_dye = self.resultsSource['p_%s' % channel]
 
             p_other = 0 * p_dye
             p_tot = self.t_p_background * self.resultsSource['ColourNorm']
 
             for k in colChans:
                 p_tot += self.resultsSource['p_%s' % k]
-                if not self.currentColour == k:
+                if not channel == k:
                     p_other = np.maximum(p_other, self.resultsSource['p_%s' % k])
 
             p_dye = p_dye / p_tot
@@ -680,18 +693,25 @@ class colourFilter(TabularBase):
 
 
     def __getitem__(self, keys):
+        return self.get_channel_column(self.currentColour, keys)
+            
+    def get_channel_column(self, chan, keys):
         key, sl = self._getKeySlice(keys)
         colChans = self.getColourChans()
-
-        if not self.currentColour in colChans:
+    
+        if not chan in colChans:
             return self.resultsSource[keys]
         else:
             #chromatic shift correction
             #print self.currentColour
-            if  self.currentColour in self.chromaticShifts.keys() and key in self.chromaticShifts[self.currentColour].keys():
-                return self.resultsSource[key][self.index][sl] + self.chromaticShifts[self.currentColour][key]
+            if chan in self.chromaticShifts.keys() and key in self.chromaticShifts[chan].keys():
+                return self.resultsSource[key][self._index(chan)][sl] + self.chromaticShifts[chan][key]
             else:
-                return self.resultsSource[key][self.index][sl]
+                return self.resultsSource[key][self._index(chan)][sl]
+            
+    def get_channel_ds(self, chan):
+        return _ChannelFilter(self, chan)
+        
 
     @classmethod
     def get_colour_chans(cls, resultsSource):
